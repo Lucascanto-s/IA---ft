@@ -1,0 +1,6 @@
+Pillow>=10.0
+python-dotenv>=1.0
+requests>=2.31
+rembg>=2.0
+streamlit>=1.32
+onnxruntime>=1.17

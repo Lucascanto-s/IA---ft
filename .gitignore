@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.py[cod]
+arquivos/downloads/*
+arquivos/saida/*
+!arquivos/downloads/.gitkeep
+!arquivos/saida/.gitkeep
