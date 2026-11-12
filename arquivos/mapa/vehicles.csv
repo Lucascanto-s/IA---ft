@@ -1,2 +1,477 @@
 brand,model,years,image_path
 ford,fusion,2006 a 2009,arquivos/veiculos/ford__fusion_2006_a_2009.jpg
+Audi,A3,2014 a 2021,arquivos/veiculos/capas/audi_a3_2014_a_2021_1.png
+Audi,A3,2014,arquivos/veiculos/capas/audi_a3_2014_2.png
+Audi,A4,2006 a 2017,arquivos/veiculos/capas/audi_a4_2006_a_2017_1.png
+Audi,A4,2009,arquivos/veiculos/capas/audi_a4_2009_2.png
+Audi,A4,2009 a 2013,arquivos/veiculos/capas/audi_a4_2009_a_2013_3.png
+Audi,Q5,2008 a 2012,arquivos/veiculos/capas/audi_q5_2008_a_2012_1.png
+Audi,Q5,2009 a 2011,arquivos/veiculos/capas/audi_q5_2009_a_2011_2.png
+Audi,Q7,2012,arquivos/veiculos/capas/audi_q7_2012_1.png
+BMW,320I,2012 a 2018,arquivos/veiculos/capas/bmw_320i_2012_a_2018_1.png
+BMW,320I,2013 a 2017,arquivos/veiculos/capas/bmw_320i_2013_a_2017_2.png
+BMW,520I,2012 a 2014,arquivos/veiculos/capas/bmw_520i_2012_a_2014_1.png
+BMW,528I,2013 a 2017,arquivos/veiculos/capas/bmw_528i_2013_a_2017_1.png
+BMW,535I,2010 a 2017,arquivos/veiculos/capas/bmw_535i_2010_a_2017_1.png
+BMW,535I,2011,arquivos/veiculos/capas/bmw_535i_2011_2.png
+BMW,Serie 1,,arquivos/veiculos/capas/bmw_serie_1__1.png
+BMW,Serie 3,2012 a 2018,arquivos/veiculos/capas/bmw_serie_3_2012_a_2018_1.png
+BMW,Serie 3,2012 a 2019,arquivos/veiculos/capas/bmw_serie_3_2012_a_2019_2.png
+BMW,Serie 5,2010 a 2014,arquivos/veiculos/capas/bmw_serie_5_2010_a_2014_1.png
+BMW,Serie 5,2011,arquivos/veiculos/capas/bmw_serie_5_2011_2.png
+BMW,Serie 5,2012,arquivos/veiculos/capas/bmw_serie_5_2012_3.png
+BMW,Serie 5,2013 a 2016,arquivos/veiculos/capas/bmw_serie_5_2013_a_2016_4.png
+BMW,Series,2013,arquivos/veiculos/capas/bmw_series_2013_1.png
+Chery,Arrizo,2018 a 2021,arquivos/veiculos/capas/chery_arrizo_2018_a_2021_1.png
+Chery,Celer,2011 a 2018,arquivos/veiculos/capas/chery_celer_2011_a_2018_1.png
+Chery,Celer,2011 a 2014,arquivos/veiculos/capas/chery_celer_2011_a_2014_2.png
+Chery,Cielo,2009 a 2014,arquivos/veiculos/capas/chery_cielo_2009_a_2014_1.png
+Chery,Cielo,2011 a 2013,arquivos/veiculos/capas/chery_cielo_2011_a_2013_2.png
+Chery,Face,2010 a 2015,arquivos/veiculos/capas/chery_face_2010_a_2015_1.png
+Chery,Face,2010 a 2012,arquivos/veiculos/capas/chery_face_2010_a_2012_2.png
+Chery,Face,2011 a 2014,arquivos/veiculos/capas/chery_face_2011_a_2014_3.png
+Chery,Face,2011 a 2013,arquivos/veiculos/capas/chery_face_2011_a_2013_4.png
+Chery,New Qq,2012 a 2020,arquivos/veiculos/capas/chery_new_qq_2012_a_2020_1.png
+Chery,New Qq,2015 a 2019,arquivos/veiculos/capas/chery_new_qq_2015_a_2019_2.png
+Chery,New Qq,2017 a 2019,arquivos/veiculos/capas/chery_new_qq_2017_a_2019_3.png
+Chery,Qq,1997 a 2016,arquivos/veiculos/capas/chery_qq_1997_a_2016_1.png
+Chery,Qq,2011 a 2015,arquivos/veiculos/capas/chery_qq_2011_a_2015_2.png
+Chery,Qq,2015 a 2018,arquivos/veiculos/capas/chery_qq_2015_a_2018_3.png
+Chery,Qq,2017 a 2019,arquivos/veiculos/capas/chery_qq_2017_a_2019_4.png
+Chery,S,2010 a 2014,arquivos/veiculos/capas/chery_s_2010_a_2014_1.png
+Chery,S18,2010 a 2015,arquivos/veiculos/capas/chery_s18_2010_a_2015_1.png
+Chery,S18,2011 a 2012,arquivos/veiculos/capas/chery_s18_2011_a_2012_2.png
+Chery,Tiggo,2022 a 2023,arquivos/veiculos/capas/chery_tiggo_2022_a_2023_1.png
+Chery,Tiggo,2019 a 2022,arquivos/veiculos/capas/chery_tiggo_2019_a_2022_2.png
+Chery,Tiggo 5X,2018 a 2024,arquivos/veiculos/capas/chery_tiggo_5x_2018_a_2024_1.png
+Chery,Tiggo 5X,2019 a 2026,arquivos/veiculos/capas/chery_tiggo_5x_2019_a_2026_2.png
+Chery,Tiggo 5X,2021 a 2023,arquivos/veiculos/capas/chery_tiggo_5x_2021_a_2023_3.png
+Chery,Tiggo 7,2020 a 2024,arquivos/veiculos/capas/chery_tiggo_7_2020_a_2024_1.png
+Chery,Tiggo 7,2021 a 2023,arquivos/veiculos/capas/chery_tiggo_7_2021_a_2023_2.png
+Chery,Tiggo 7,2021 a 2025,arquivos/veiculos/capas/chery_tiggo_7_2021_a_2025_3.png
+Chery,Tiggo 7,2023,arquivos/veiculos/capas/chery_tiggo_7_2023_4.png
+Chery,Tiggo 8,2023 a 2024,arquivos/veiculos/capas/chery_tiggo_8_2023_a_2024_1.png
+Chery,Tiggo Cielo,2011 a 2012,arquivos/veiculos/capas/chery_tiggo_cielo_2011_a_2012_1.png
+Chery,Tiggo S18,2014 a 2015,arquivos/veiculos/capas/chery_tiggo_s18_2014_a_2015_1.png
+Chevrolet,Agile,2009 a 2011,arquivos/veiculos/capas/chevrolet_agile_2009_a_2011_1.png
+Chevrolet,Agile,2010 a 2020,arquivos/veiculos/capas/chevrolet_agile_2010_a_2020_2.png
+Chevrolet,Agile,2012 a 2015,arquivos/veiculos/capas/chevrolet_agile_2012_a_2015_3.png
+Chevrolet,Astra,,arquivos/veiculos/capas/chevrolet_astra__1.png
+Chevrolet,Astra,2001 a 2003,arquivos/veiculos/capas/chevrolet_astra_2001_a_2003_2.png
+Chevrolet,Astra,2008 a 2010,arquivos/veiculos/capas/chevrolet_astra_2008_a_2010_3.png
+Chevrolet,Blazer,,arquivos/veiculos/capas/chevrolet_blazer__1.png
+Chevrolet,Blazer,1996 a 2000,arquivos/veiculos/capas/chevrolet_blazer_1996_a_2000_2.png
+Chevrolet,Camaro,,arquivos/veiculos/capas/chevrolet_camaro__1.png
+Chevrolet,Captiva,2008 a 2015,arquivos/veiculos/capas/chevrolet_captiva_2008_a_2015_1.png
+Chevrolet,Captiva,2008 a 2017,arquivos/veiculos/capas/chevrolet_captiva_2008_a_2017_2.png
+Chevrolet,Celta,2009 a 2016,arquivos/veiculos/capas/chevrolet_celta_2009_a_2016_1.png
+Chevrolet,Chevette,1980 a 1982,arquivos/veiculos/capas/chevrolet_chevette_1980_a_1982_1.png
+Chevrolet,Chevette,1983 a 2000,arquivos/veiculos/capas/chevrolet_chevette_1983_a_2000_2.png
+Chevrolet,Chevrolet,1998,arquivos/veiculos/capas/chevrolet_chevrolet_1998_1.png
+Chevrolet,Classic,2013 a 2015,arquivos/veiculos/capas/chevrolet_classic_2013_a_2015_1.png
+Chevrolet,Cobalt,2011 a 2018,arquivos/veiculos/capas/chevrolet_cobalt_2011_a_2018_1.png
+Chevrolet,Cobalt,2012 a 2013,arquivos/veiculos/capas/chevrolet_cobalt_2012_a_2013_2.png
+Chevrolet,Cobalt,2013 a 2022,arquivos/veiculos/capas/chevrolet_cobalt_2013_a_2022_3.png
+Chevrolet,Corsa,1997 a 2000,arquivos/veiculos/capas/chevrolet_corsa_1997_a_2000_1.png
+Chevrolet,Corsa,2003 a 2011,arquivos/veiculos/capas/chevrolet_corsa_2003_a_2011_2.png
+Chevrolet,Cruze,2016 a 2022,arquivos/veiculos/capas/chevrolet_cruze_2016_a_2022_1.png
+Chevrolet,Cruze,2017 a 2023,arquivos/veiculos/capas/chevrolet_cruze_2017_a_2023_2.png
+Chevrolet,Cruze,2019 a 2024,arquivos/veiculos/capas/chevrolet_cruze_2019_a_2024_3.png
+Chevrolet,Equinox,2017 a 2024,arquivos/veiculos/capas/chevrolet_equinox_2017_a_2024_1.png
+Chevrolet,Kadett,1992 a 1994,arquivos/veiculos/capas/chevrolet_kadett_1992_a_1994_1.png
+Chevrolet,Linha,2013,arquivos/veiculos/capas/chevrolet_linha_2013_1.png
+Chevrolet,Meriva,2003 a 2012,arquivos/veiculos/capas/chevrolet_meriva_2003_a_2012_1.png
+Chevrolet,Montana,2021 a 2024,arquivos/veiculos/capas/chevrolet_montana_2021_a_2024_1.png
+Chevrolet,Onix,2014 a 2016,arquivos/veiculos/capas/chevrolet_onix_2014_a_2016_1.png
+Chevrolet,Onix,2019 a 2021,arquivos/veiculos/capas/chevrolet_onix_2019_a_2021_2.png
+Chevrolet,Prisma,2013 a 2014,arquivos/veiculos/capas/chevrolet_prisma_2013_a_2014_1.png
+Chevrolet,S10,2013 a 2020,arquivos/veiculos/capas/chevrolet_s10_2013_a_2020_1.png
+Chevrolet,Spin,2012 a 2015,arquivos/veiculos/capas/chevrolet_spin_2012_a_2015_1.png
+Chevrolet,Spin,2014 a 2019,arquivos/veiculos/capas/chevrolet_spin_2014_a_2019_2.png
+Chevrolet,Spin,2014 a 2020,arquivos/veiculos/capas/chevrolet_spin_2014_a_2020_3.png
+Chevrolet,Tracker,2014 a 2021,arquivos/veiculos/capas/chevrolet_tracker_2014_a_2021_1.png
+Chevrolet,Tracker,2017 a 2020,arquivos/veiculos/capas/chevrolet_tracker_2017_a_2020_2.png
+Chevrolet,Tracker,2018 a 2019,arquivos/veiculos/capas/chevrolet_tracker_2018_a_2019_3.png
+Chevrolet,Tracker,2020 a 2025,arquivos/veiculos/capas/chevrolet_tracker_2020_a_2025_4.png
+Chevrolet,Vectra,1993 a 1994,arquivos/veiculos/capas/chevrolet_vectra_1993_a_1994_1.png
+Chevrolet,Vectra,1994 a 2002,arquivos/veiculos/capas/chevrolet_vectra_1994_a_2002_2.png
+Chevrolet,Vectra,1996 a 1997,arquivos/veiculos/capas/chevrolet_vectra_1996_a_1997_3.png
+Chevrolet,Vectra,1997 a 2003,arquivos/veiculos/capas/chevrolet_vectra_1997_a_2003_4.png
+Chrysler,Pt,2005 a 2010,arquivos/veiculos/capas/chrysler_pt_2005_a_2010_1.png
+Citroen,Aircross,2008 a 2021,arquivos/veiculos/capas/citroen_aircross_2008_a_2021_1.png
+Citroen,Aircross,2011 a 2015,arquivos/veiculos/capas/citroen_aircross_2011_a_2015_2.png
+Citroen,C3,2008 a 2019,arquivos/veiculos/capas/citroen_c3_2008_a_2019_1.png
+Citroen,C4,,arquivos/veiculos/capas/citroen_c4__1.png
+Citroen,C4,2008 a 2013,arquivos/veiculos/capas/citroen_c4_2008_a_2013_2.png
+Citroen,C4 Lounge,2013 a 2015,arquivos/veiculos/capas/citroen_c4_lounge_2013_a_2015_1.png
+Citroen,C4 Lounge,2013 a 2018,arquivos/veiculos/capas/citroen_c4_lounge_2013_a_2018_2.png
+Citroen,C4 Lounge,2014 a 2019,arquivos/veiculos/capas/citroen_c4_lounge_2014_a_2019_3.png
+Citroen,C4 Pallas,2007 a 2014,arquivos/veiculos/capas/citroen_c4_pallas_2007_a_2014_1.png
+Citroen,C4 Pallas,2007 a 2012,arquivos/veiculos/capas/citroen_c4_pallas_2007_a_2012_2.png
+Citroen,C4 Pallas,2007 a 2020,arquivos/veiculos/capas/citroen_c4_pallas_2007_a_2020_3.png
+Citroen,C4 Pallas,2008 a 2011,arquivos/veiculos/capas/citroen_c4_pallas_2008_a_2011_4.png
+Citroen,C5,2003 a 2009,arquivos/veiculos/capas/citroen_c5_2003_a_2009_1.png
+Citroen,C5,2006 a 2009,arquivos/veiculos/capas/citroen_c5_2006_a_2009_2.png
+Citroen,C5,2008 a 2012,arquivos/veiculos/capas/citroen_c5_2008_a_2012_3.png
+Citroen,C5,2008 a 2015,arquivos/veiculos/capas/citroen_c5_2008_a_2015_4.png
+Citroen,C5,2009 a 2013,arquivos/veiculos/capas/citroen_c5_2009_a_2013_5.png
+Citroen,Central,2011 a 2019,arquivos/veiculos/capas/citroen_central_2011_a_2019_1.png
+Citroen,Citroen,2013 a 2014,arquivos/veiculos/capas/citroen_citroen_2013_a_2014_1.png
+Citroen,Jumpy,2018 a 2020,arquivos/veiculos/capas/citroen_jumpy_2018_a_2020_1.png
+Citroen,Peugeot,2008 a 2019,arquivos/veiculos/capas/citroen_peugeot_2008_a_2019_1.png
+Citroen,Peugeot,2008 a 2020,arquivos/veiculos/capas/citroen_peugeot_2008_a_2020_2.png
+Citroen,Picasso,2001 a 2012,arquivos/veiculos/capas/citroen_picasso_2001_a_2012_1.png
+Citroen,Picasso,2003 a 2012,arquivos/veiculos/capas/citroen_picasso_2003_a_2012_2.png
+Citroen,Picasso,2006 a 2012,arquivos/veiculos/capas/citroen_picasso_2006_a_2012_3.png
+Citroen,Picasso,2007 a 2008,arquivos/veiculos/capas/citroen_picasso_2007_a_2008_4.png
+Citroen,Xsara,2001 a 2016,arquivos/veiculos/capas/citroen_xsara_2001_a_2016_1.png
+Citroen,Xsara,2003 a 2012,arquivos/veiculos/capas/citroen_xsara_2003_a_2012_2.png
+Citroen,Xsara,2003 a 2004,arquivos/veiculos/capas/citroen_xsara_2003_a_2004_3.png
+Citroen,Xsara,2005 a 2012,arquivos/veiculos/capas/citroen_xsara_2005_a_2012_4.png
+Citroen,Xsara,2009,arquivos/veiculos/capas/citroen_xsara_2009_5.png
+Daihatsu,Move,2014 a 2019,arquivos/veiculos/capas/daihatsu_move_2014_a_2019_1.png
+Daihatsu,Move,2015,arquivos/veiculos/capas/daihatsu_move_2015_2.png
+Dodge,Journey,2008 a 2012,arquivos/veiculos/capas/dodge_journey_2008_a_2012_1.png
+Dodge,Journey,2008 a 2017,arquivos/veiculos/capas/dodge_journey_2008_a_2017_2.png
+Dodge,Journey,2010 a 2014,arquivos/veiculos/capas/dodge_journey_2010_a_2014_3.png
+Dodge,Ram,2002 a 2009,arquivos/veiculos/capas/dodge_ram_2002_a_2009_1.png
+Fiat,500,2008 a 2013,arquivos/veiculos/capas/fiat_500_2008_a_2013_1.png
+Fiat,500,2011 a 2014,arquivos/veiculos/capas/fiat_500_2011_a_2014_2.png
+Fiat,500,2012 a 2013,arquivos/veiculos/capas/fiat_500_2012_a_2013_3.png
+Fiat,Argo,,arquivos/veiculos/capas/fiat_argo__1.png
+Fiat,Argo,2020 a 2021,arquivos/veiculos/capas/fiat_argo_2020_a_2021_2.png
+Fiat,Argo,2021 a 2023,arquivos/veiculos/capas/fiat_argo_2021_a_2023_3.png
+Fiat,Cronos,,arquivos/veiculos/capas/fiat_cronos__1.png
+Fiat,Cronos,2018 a 2023,arquivos/veiculos/capas/fiat_cronos_2018_a_2023_2.png
+Fiat,Cronos,2018 a 2022,arquivos/veiculos/capas/fiat_cronos_2018_a_2022_3.png
+Fiat,Doblo,2006 a 2010,arquivos/veiculos/capas/fiat_doblo_2006_a_2010_1.png
+Fiat,Doblo,2010 a 2021,arquivos/veiculos/capas/fiat_doblo_2010_a_2021_2.png
+Fiat,Ducato,2006 a 2012,arquivos/veiculos/capas/fiat_ducato_2006_a_2012_1.png
+Fiat,Ducato,2013 a 2014,arquivos/veiculos/capas/fiat_ducato_2013_a_2014_2.png
+Fiat,Fiesta,2008 a 2014,arquivos/veiculos/capas/fiat_fiesta_2008_a_2014_1.png
+Fiat,Fiorino,1998 a 2021,arquivos/veiculos/capas/fiat_fiorino_1998_a_2021_1.png
+Fiat,Freemont,2010 a 2016,arquivos/veiculos/capas/fiat_freemont_2010_a_2016_1.png
+Fiat,Grand Siena,2013 a 2015,arquivos/veiculos/capas/fiat_grand_siena_2013_a_2015_1.png
+Fiat,Grand Siena,2015 a 2021,arquivos/veiculos/capas/fiat_grand_siena_2015_a_2021_2.png
+Fiat,Grand Siena,2017 a 2020,arquivos/veiculos/capas/fiat_grand_siena_2017_a_2020_3.png
+Fiat,Grandsiena,2012 a 2017,arquivos/veiculos/capas/fiat_grandsiena_2012_a_2017_1.png
+Fiat,Idea,2005 a 2010,arquivos/veiculos/capas/fiat_idea_2005_a_2010_1.png
+Fiat,Idea,2006 a 2010,arquivos/veiculos/capas/fiat_idea_2006_a_2010_2.png
+Fiat,Idea,2006 a 2012,arquivos/veiculos/capas/fiat_idea_2006_a_2012_3.png
+Fiat,Linea,,arquivos/veiculos/capas/fiat_linea__1.png
+Fiat,Linea,2010 a 2014,arquivos/veiculos/capas/fiat_linea_2010_a_2014_2.png
+Fiat,Marea,1998 a 2003,arquivos/veiculos/capas/fiat_marea_1998_a_2003_1.png
+Fiat,Marea,1999 a 2005,arquivos/veiculos/capas/fiat_marea_1999_a_2005_2.png
+Fiat,Marea,2001 a 2003,arquivos/veiculos/capas/fiat_marea_2001_a_2003_3.png
+Fiat,Mobi,2014,arquivos/veiculos/capas/fiat_mobi_2014_1.png
+Fiat,Mobi,2016 a 2020,arquivos/veiculos/capas/fiat_mobi_2016_a_2020_2.png
+Fiat,Palio,,arquivos/veiculos/capas/fiat_palio__1.png
+Fiat,Palio,2001 a 2012,arquivos/veiculos/capas/fiat_palio_2001_a_2012_2.png
+Fiat,Pulse,2020 a 2025,arquivos/veiculos/capas/fiat_pulse_2020_a_2025_1.png
+Fiat,Pulse,2021 a 2025,arquivos/veiculos/capas/fiat_pulse_2021_a_2025_2.png
+Fiat,Pulse,2022 a 2025,arquivos/veiculos/capas/fiat_pulse_2022_a_2025_3.png
+Fiat,Punto,2007 a 2011,arquivos/veiculos/capas/fiat_punto_2007_a_2011_1.png
+Fiat,Punto,2008 a 2012,arquivos/veiculos/capas/fiat_punto_2008_a_2012_2.png
+Fiat,Punto,2010 a 2013,arquivos/veiculos/capas/fiat_punto_2010_a_2013_3.png
+Fiat,Punto,2012 a 2014,arquivos/veiculos/capas/fiat_punto_2012_a_2014_4.png
+Fiat,Punto,2015 a 2017,arquivos/veiculos/capas/fiat_punto_2015_a_2017_5.png
+Fiat,Siena,2010 a 2016,arquivos/veiculos/capas/fiat_siena_2010_a_2016_1.png
+Fiat,Siena,2012 a 2021,arquivos/veiculos/capas/fiat_siena_2012_a_2021_2.png
+Fiat,Stilo,2002 a 2010,arquivos/veiculos/capas/fiat_stilo_2002_a_2010_1.png
+Fiat,Stilo,2003 a 2010,arquivos/veiculos/capas/fiat_stilo_2003_a_2010_2.png
+Fiat,Stilo,2004 a 2010,arquivos/veiculos/capas/fiat_stilo_2004_a_2010_3.png
+Fiat,Strada,2015 a 2020,arquivos/veiculos/capas/fiat_strada_2015_a_2020_1.png
+Fiat,Strada,2020 a 2024,arquivos/veiculos/capas/fiat_strada_2020_a_2024_2.png
+Fiat,Strada,2021 a 2022,arquivos/veiculos/capas/fiat_strada_2021_a_2022_3.png
+Fiat,Toro,2016 a 2026,arquivos/veiculos/capas/fiat_toro_2016_a_2026_1.png
+Fiat,Toro,2021 a 2023,arquivos/veiculos/capas/fiat_toro_2021_a_2023_2.png
+Fiat,Uno,,arquivos/veiculos/capas/fiat_uno__1.png
+Fiat,Uno,2010 a 2015,arquivos/veiculos/capas/fiat_uno_2010_a_2015_2.png
+Fiat,Uno,2011 a 2016,arquivos/veiculos/capas/fiat_uno_2011_a_2016_3.png
+Fiat,Uno,2013 a 2015,arquivos/veiculos/capas/fiat_uno_2013_a_2015_4.png
+Fiat,Uno,2014 a 2017,arquivos/veiculos/capas/fiat_uno_2014_a_2017_5.png
+Ford,Bronco,2021 a 2024,arquivos/veiculos/capas/ford_bronco_2021_a_2024_1.png
+Ford,Bronco,2022,arquivos/veiculos/capas/ford_bronco_2022_2.png
+Ford,Del,1981 a 1984,arquivos/veiculos/capas/ford_del_1981_a_1984_1.png
+Ford,Ecosport,2003 a 2012,arquivos/veiculos/capas/ford_ecosport_2003_a_2012_1.png
+Ford,Ecosport,2011 a 2013,arquivos/veiculos/capas/ford_ecosport_2011_a_2013_2.png
+Ford,Ecosport,2013 a 2017,arquivos/veiculos/capas/ford_ecosport_2013_a_2017_3.png
+Ford,Ecosport,2015 a 2017,arquivos/veiculos/capas/ford_ecosport_2015_a_2017_4.png
+Ford,Ecosport,2016 a 2018,arquivos/veiculos/capas/ford_ecosport_2016_a_2018_5.png
+Ford,Ecosport,2017 a 2018,arquivos/veiculos/capas/ford_ecosport_2017_a_2018_6.png
+Ford,Escort,1983 a 1986,arquivos/veiculos/capas/ford_escort_1983_a_1986_1.png
+Ford,Escort,1997 a 2002,arquivos/veiculos/capas/ford_escort_1997_a_2002_2.png
+Ford,Escosport,2003 a 2013,arquivos/veiculos/capas/ford_escosport_2003_a_2013_1.png
+Ford,Fiesta,2003 a 2005,arquivos/veiculos/capas/ford_fiesta_2003_a_2005_1.png
+Ford,Fiesta,2006 a 2008,arquivos/veiculos/capas/ford_fiesta_2006_a_2008_2.png
+Ford,Fiesta,2013 a 2018,arquivos/veiculos/capas/ford_fiesta_2013_a_2018_3.png
+Ford,Focus,1998 a 2004,arquivos/veiculos/capas/ford_focus_1998_a_2004_1.png
+Ford,Fusion,2006 a 2009,arquivos/veiculos/capas/ford_fusion_2006_a_2009_1.png
+Ford,Fusion,2006 a 2011,arquivos/veiculos/capas/ford_fusion_2006_a_2011_2.png
+Ford,Fusion,2007 a 2008,arquivos/veiculos/capas/ford_fusion_2007_a_2008_3.png
+Ford,Fusion,2009 a 2012,arquivos/veiculos/capas/ford_fusion_2009_a_2012_4.png
+Ford,Ka,2009 a 2013,arquivos/veiculos/capas/ford_ka_2009_a_2013_1.png
+Ford,Ka,2014 a 2017,arquivos/veiculos/capas/ford_ka_2014_a_2017_2.png
+Ford,Ka,2016 a 2021,arquivos/veiculos/capas/ford_ka_2016_a_2021_3.png
+Ford,Mondeo,1994 a 2002,arquivos/veiculos/capas/ford_mondeo_1994_a_2002_1.png
+Ford,New Fiesta,2011 a 2013,arquivos/veiculos/capas/ford_new_fiesta_2011_a_2013_1.png
+Ford,New Fiesta,2014 a 2019,arquivos/veiculos/capas/ford_new_fiesta_2014_a_2019_2.png
+GWM,H6,2024,arquivos/veiculos/capas/gwm_h6_2024_1.png
+GWM,Haval,2022 a 2025,arquivos/veiculos/capas/gwm_haval_2022_a_2025_1.png
+GWM,Haval,2022 a 2024,arquivos/veiculos/capas/gwm_haval_2022_a_2024_2.png
+GWM,Haval,2023 a 2025,arquivos/veiculos/capas/gwm_haval_2023_a_2025_3.png
+GWM,Haval,2024 a 2025,arquivos/veiculos/capas/gwm_haval_2024_a_2025_4.png
+Honda,City,2008 a 2014,arquivos/veiculos/capas/honda_city_2008_a_2014_1.png
+Honda,City,2009 a 2015,arquivos/veiculos/capas/honda_city_2009_a_2015_2.png
+Honda,City,2015 a 2022,arquivos/veiculos/capas/honda_city_2015_a_2022_3.png
+Honda,Civic,,arquivos/veiculos/capas/honda_civic__1.png
+Honda,Civic,2008 a 2011,arquivos/veiculos/capas/honda_civic_2008_a_2011_2.png
+Honda,Civic,2012 a 2016,arquivos/veiculos/capas/honda_civic_2012_a_2016_3.png
+Honda,Elite,2019 a 2023,arquivos/veiculos/capas/honda_elite_2019_a_2023_1.png
+Honda,Fit,2008 a 2015,arquivos/veiculos/capas/honda_fit_2008_a_2015_1.png
+Honda,Fit,2015 a 2019,arquivos/veiculos/capas/honda_fit_2015_a_2019_2.png
+Honda,Fit,2018 a 2019,arquivos/veiculos/capas/honda_fit_2018_a_2019_3.png
+Honda,Hr V,2014 a 2021,arquivos/veiculos/capas/honda_hr_v_2014_a_2021_1.png
+Honda,Hr V,2015 a 2020,arquivos/veiculos/capas/honda_hr_v_2015_a_2020_2.png
+Honda,Hr V,2016 a 2022,arquivos/veiculos/capas/honda_hr_v_2016_a_2022_3.png
+Honda,Hr V,2020 a 2023,arquivos/veiculos/capas/honda_hr_v_2020_a_2023_4.png
+Honda,Hr V,2022 a 2023,arquivos/veiculos/capas/honda_hr_v_2022_a_2023_5.png
+Honda,Hrv,2015 a 2021,arquivos/veiculos/capas/honda_hrv_2015_a_2021_1.png
+Honda,Hrv,2016 a 2021,arquivos/veiculos/capas/honda_hrv_2016_a_2021_2.png
+Honda,Hrv,2016 a 2022,arquivos/veiculos/capas/honda_hrv_2016_a_2022_3.png
+Honda,Hrv,2022 a 2025,arquivos/veiculos/capas/honda_hrv_2022_a_2025_4.png
+Honda,New Civic,2007 a 2011,arquivos/veiculos/capas/honda_new_civic_2007_a_2011_1.png
+Honda,New Fit,2018 a 2021,arquivos/veiculos/capas/honda_new_fit_2018_a_2021_1.png
+Honda,New Fit,2014,arquivos/veiculos/capas/honda_new_fit_2014_2.png
+Honda,New Fit,2015 a 2021,arquivos/veiculos/capas/honda_new_fit_2015_a_2021_3.png
+Honda,Wr V,2018 a 2021,arquivos/veiculos/capas/honda_wr_v_2018_a_2021_1.png
+Honda,Wr V,2019 a 2023,arquivos/veiculos/capas/honda_wr_v_2019_a_2023_2.png
+Honda,Wr V,2018 a 2021,arquivos/veiculos/capas/honda_wr_v_2018_a_2021_3.png
+Hyundai,Atos,2000 a 2005,arquivos/veiculos/capas/hyundai_atos_2000_a_2005_1.png
+Hyundai,Azera,2006 a 2011,arquivos/veiculos/capas/hyundai_azera_2006_a_2011_1.png
+Hyundai,Creta,2017 a 2022,arquivos/veiculos/capas/hyundai_creta_2017_a_2022_1.png
+Hyundai,Creta,2018 a 2021,arquivos/veiculos/capas/hyundai_creta_2018_a_2021_2.png
+Hyundai,Creta,2023 a 2024,arquivos/veiculos/capas/hyundai_creta_2023_a_2024_3.png
+Hyundai,Elantra,2011,arquivos/veiculos/capas/hyundai_elantra_2011_1.png
+Hyundai,Hb20,,arquivos/veiculos/capas/hyundai_hb20__1.png
+Hyundai,Hb20,2012 a 2021,arquivos/veiculos/capas/hyundai_hb20_2012_a_2021_2.png
+Hyundai,Hb20,2015 a 2018,arquivos/veiculos/capas/hyundai_hb20_2015_a_2018_3.png
+Hyundai,Hb20,2019 a 2024,arquivos/veiculos/capas/hyundai_hb20_2019_a_2024_4.png
+Hyundai,Hb20S,2013 a 2014,arquivos/veiculos/capas/hyundai_hb20s_2013_a_2014_1.png
+Hyundai,Hb20S,2013 a 2016,arquivos/veiculos/capas/hyundai_hb20s_2013_a_2016_2.png
+Hyundai,Hb20X,2013 a 2019,arquivos/veiculos/capas/hyundai_hb20x_2013_a_2019_1.png
+Hyundai,Hb20X,2015 a 2018,arquivos/veiculos/capas/hyundai_hb20x_2015_a_2018_2.png
+Hyundai,I30,2008 a 2012,arquivos/veiculos/capas/hyundai_i30_2008_a_2012_1.png
+Hyundai,I30,2010 a 2011,arquivos/veiculos/capas/hyundai_i30_2010_a_2011_2.png
+Hyundai,I30,2011,arquivos/veiculos/capas/hyundai_i30_2011_3.png
+Hyundai,I30,2009 a 2012,arquivos/veiculos/capas/hyundai_i30_2009_a_2012_4.png
+Hyundai,Ix35,2010 a 2016,arquivos/veiculos/capas/hyundai_ix35_2010_a_2016_1.png
+Hyundai,Kia,2012,arquivos/veiculos/capas/hyundai_kia_2012_1.png
+Hyundai,Santa Fe,2008,arquivos/veiculos/capas/hyundai_santa_fe_2008_1.png
+Hyundai,Santa Fe,2012,arquivos/veiculos/capas/hyundai_santa_fe_2012_2.png
+Hyundai,Santa Fe,2013 a 2019,arquivos/veiculos/capas/hyundai_santa_fe_2013_a_2019_3.png
+Hyundai,Sonata,2011 a 2014,arquivos/veiculos/capas/hyundai_sonata_2011_a_2014_1.png
+Hyundai,Sonata,2011 a 2014,arquivos/veiculos/capas/hyundai_sonata_2011_a_2014_2.png
+Hyundai,Sportage,2009,arquivos/veiculos/capas/hyundai_sportage_2009_1.png
+Hyundai,Tucson,2004,arquivos/veiculos/capas/hyundai_tucson_2004_1.png
+Hyundai,Tucson,2005 a 2016,arquivos/veiculos/capas/hyundai_tucson_2005_a_2016_2.png
+Hyundai,Tucson,2007 a 2016,arquivos/veiculos/capas/hyundai_tucson_2007_a_2016_3.png
+Hyundai,Tucson,2009 a 2015,arquivos/veiculos/capas/hyundai_tucson_2009_a_2015_4.png
+Hyundai,Veloster,2011 a 2014,arquivos/veiculos/capas/hyundai_veloster_2011_a_2014_1.png
+Hyundai,Veloster,2012,arquivos/veiculos/capas/hyundai_veloster_2012_2.png
+Hyundai,Veloster,2012 a 2016,arquivos/veiculos/capas/hyundai_veloster_2012_a_2016_3.png
+JAC,J2,2011 a 2017,arquivos/veiculos/capas/jac_j2_2011_a_2017_1.png
+JAC,J2,2012 a 2016,arquivos/veiculos/capas/jac_j2_2012_a_2016_2.png
+JAC,J3,2010 a 2017,arquivos/veiculos/capas/jac_j3_2010_a_2017_1.png
+JAC,J3,2012 a 2014,arquivos/veiculos/capas/jac_j3_2012_a_2014_2.png
+Jeep,Cherokee,1996 a 2000,arquivos/veiculos/capas/jeep_cherokee_1996_a_2000_1.png
+Jeep,Cherokee,2001 a 2010,arquivos/veiculos/capas/jeep_cherokee_2001_a_2010_2.png
+Jeep,Cherokee,2014,arquivos/veiculos/capas/jeep_cherokee_2014_3.png
+Jeep,Cherokee,2014 a 2022,arquivos/veiculos/capas/jeep_cherokee_2014_a_2022_4.png
+Jeep,Cherokee,2016 a 2018,arquivos/veiculos/capas/jeep_cherokee_2016_a_2018_5.png
+Jeep,Commander,,arquivos/veiculos/capas/jeep_commander__1.png
+Jeep,Commander,2022,arquivos/veiculos/capas/jeep_commander_2022_2.png
+Jeep,Compass,,arquivos/veiculos/capas/jeep_compass__1.png
+Jeep,Compass,2016 a 2021,arquivos/veiculos/capas/jeep_compass_2016_a_2021_2.png
+Jeep,Compass,2017 a 2020,arquivos/veiculos/capas/jeep_compass_2017_a_2020_3.png
+Jeep,Grand Cherokee,2011 a 2020,arquivos/veiculos/capas/jeep_grand_cherokee_2011_a_2020_1.png
+Jeep,Grand Cherokee,2011 a 2021,arquivos/veiculos/capas/jeep_grand_cherokee_2011_a_2021_2.png
+Jeep,Grand Cherokee,2011 a 2025,arquivos/veiculos/capas/jeep_grand_cherokee_2011_a_2025_3.png
+Jeep,Grand Cherokee,2012 a 2014,arquivos/veiculos/capas/jeep_grand_cherokee_2012_a_2014_4.png
+Jeep,Renagade,2018 a 2022,arquivos/veiculos/capas/jeep_renagade_2018_a_2022_1.png
+Jeep,Renegade,2015 a 2023,arquivos/veiculos/capas/jeep_renegade_2015_a_2023_1.png
+Jeep,Renegade,2016 a 2024,arquivos/veiculos/capas/jeep_renegade_2016_a_2024_2.png
+Jeep,Renegade,2019 a 2023,arquivos/veiculos/capas/jeep_renegade_2019_a_2023_3.png
+Jeep,Toro,2015 a 2024,arquivos/veiculos/capas/jeep_toro_2015_a_2024_1.png
+Jeep,Wrangler,2011 a 2018,arquivos/veiculos/capas/jeep_wrangler_2011_a_2018_1.png
+Jeep,Wrangler,2012 a 2018,arquivos/veiculos/capas/jeep_wrangler_2012_a_2018_2.png
+Kia,Cerato,,arquivos/veiculos/capas/kia_cerato__1.png
+Kia,Cerato,2010 a 2011,arquivos/veiculos/capas/kia_cerato_2010_a_2011_2.png
+Kia,Cerato,2016 a 2020,arquivos/veiculos/capas/kia_cerato_2016_a_2020_3.png
+Kia,Sorento,2010 a 2012,arquivos/veiculos/capas/kia_sorento_2010_a_2012_1.png
+Kia,Sportage,2006 a 2016,arquivos/veiculos/capas/kia_sportage_2006_a_2016_1.png
+Kia,Sportage,2007 a 2012,arquivos/veiculos/capas/kia_sportage_2007_a_2012_2.png
+Kia,Sportage,2008 a 2011,arquivos/veiculos/capas/kia_sportage_2008_a_2011_3.png
+Land Rover,Discovery,2010 a 2015,arquivos/veiculos/capas/land_rover_discovery_2010_a_2015_1.png
+Land Rover,Discovery,2011 a 2016,arquivos/veiculos/capas/land_rover_discovery_2011_a_2016_2.png
+Land Rover,Discovery,2011 a 2015,arquivos/veiculos/capas/land_rover_discovery_2011_a_2015_3.png
+Land Rover,Discovery Sport,2014 a 2015,arquivos/veiculos/capas/land_rover_discovery_sport_2014_a_2015_1.png
+Land Rover,Discovery Sport,2015 a 2016,arquivos/veiculos/capas/land_rover_discovery_sport_2015_a_2016_2.png
+Land Rover,Freelander,2015 a 2016,arquivos/veiculos/capas/land_rover_freelander_2015_a_2016_1.png
+Land Rover,Range Rover,2013 a 2015,arquivos/veiculos/capas/land_rover_range_rover_2013_a_2015_1.png
+Lifan,530,2012 a 2018,arquivos/veiculos/capas/lifan_530_2012_a_2018_1.png
+Lifan,530,2014 a 2017,arquivos/veiculos/capas/lifan_530_2014_a_2017_2.png
+Lifan,X60,2012 a 2021,arquivos/veiculos/capas/lifan_x60_2012_a_2021_1.png
+Lifan,X60,2013 a 2019,arquivos/veiculos/capas/lifan_x60_2013_a_2019_2.png
+Lifan,X60,2014 a 2016,arquivos/veiculos/capas/lifan_x60_2014_a_2016_3.png
+Lifan,X60,2015 a 2019,arquivos/veiculos/capas/lifan_x60_2015_a_2019_4.png
+Lifan,X60,2015 a 2016,arquivos/veiculos/capas/lifan_x60_2015_a_2016_5.png
+Mercedes-Benz,C280,1997 a 1999,arquivos/veiculos/capas/mercedes-benz_c280_1997_a_1999_1.png
+Mercedes-Benz,Classe A,1997 a 2001,arquivos/veiculos/capas/mercedes-benz_classe_a_1997_a_2001_1.png
+Mercedes-Benz,Classe A,1999 a 2005,arquivos/veiculos/capas/mercedes-benz_classe_a_1999_a_2005_2.png
+Mercedes-Benz,Classe A,2000 a 2002,arquivos/veiculos/capas/mercedes-benz_classe_a_2000_a_2002_3.png
+Mercedes-Benz,Classe A,2001 a 2005,arquivos/veiculos/capas/mercedes-benz_classe_a_2001_a_2005_4.png
+Mini,Cooper,2018 a 2019,arquivos/veiculos/capas/mini_cooper_2018_a_2019_1.png
+Mitsubishi,Lancer,2011 a 2016,arquivos/veiculos/capas/mitsubishi_lancer_2011_a_2016_1.png
+Mitsubishi,Lancer,2015 a 2017,arquivos/veiculos/capas/mitsubishi_lancer_2015_a_2017_2.png
+Mitsubishi,Outlander,2008 a 2018,arquivos/veiculos/capas/mitsubishi_outlander_2008_a_2018_1.png
+Mitsubishi,Outlander,2013 a 2021,arquivos/veiculos/capas/mitsubishi_outlander_2013_a_2021_2.png
+Nissan,Altima,2013 a 2016,arquivos/veiculos/capas/nissan_altima_2013_a_2016_1.png
+Nissan,Frontier,2003 a 2006,arquivos/veiculos/capas/nissan_frontier_2003_a_2006_1.png
+Nissan,Frontier,2021 a 2023,arquivos/veiculos/capas/nissan_frontier_2021_a_2023_2.png
+Nissan,Kicks,2016 a 2024,arquivos/veiculos/capas/nissan_kicks_2016_a_2024_1.png
+Nissan,Kicks,2018 a 2022,arquivos/veiculos/capas/nissan_kicks_2018_a_2022_2.png
+Nissan,Kicks,2020,arquivos/veiculos/capas/nissan_kicks_2020_3.png
+Nissan,Livina,,arquivos/veiculos/capas/nissan_livina__1.png
+Nissan,March,2012 a 2020,arquivos/veiculos/capas/nissan_march_2012_a_2020_1.png
+Nissan,March,2014 a 2019,arquivos/veiculos/capas/nissan_march_2014_a_2019_2.png
+Nissan,Sentra,2012 a 2020,arquivos/veiculos/capas/nissan_sentra_2012_a_2020_1.png
+Nissan,Sentra,2013 a 2016,arquivos/veiculos/capas/nissan_sentra_2013_a_2016_2.png
+Nissan,Sentra,2014 a 2019,arquivos/veiculos/capas/nissan_sentra_2014_a_2019_3.png
+Nissan,Tiida,2008 a 2014,arquivos/veiculos/capas/nissan_tiida_2008_a_2014_1.png
+Nissan,Tiida,2010 a 2012,arquivos/veiculos/capas/nissan_tiida_2010_a_2012_2.png
+Nissan,Tiida,2014,arquivos/veiculos/capas/nissan_tiida_2014_3.png
+Nissan,Versa,2012 a 2017,arquivos/veiculos/capas/nissan_versa_2012_a_2017_1.png
+Nissan,Versa,2016 a 2018,arquivos/veiculos/capas/nissan_versa_2016_a_2018_2.png
+Nissan,Versa,2017 a 2018,arquivos/veiculos/capas/nissan_versa_2017_a_2018_3.png
+Nissan,Versa,2020 a 2023,arquivos/veiculos/capas/nissan_versa_2020_a_2023_4.png
+Peugeot,2008,2007 a 2014,arquivos/veiculos/capas/peugeot_2008_2007_a_2014_1.png
+Peugeot,2008,2008 a 2014,arquivos/veiculos/capas/peugeot_2008_2008_a_2014_2.png
+Peugeot,2008,2008 a 2017,arquivos/veiculos/capas/peugeot_2008_2008_a_2017_3.png
+Peugeot,2008,2008 a 2018,arquivos/veiculos/capas/peugeot_2008_2008_a_2018_4.png
+Peugeot,206,1999 a 2014,arquivos/veiculos/capas/peugeot_206_1999_a_2014_1.png
+Peugeot,206,2004 a 2005,arquivos/veiculos/capas/peugeot_206_2004_a_2005_2.png
+Peugeot,207,,arquivos/veiculos/capas/peugeot_207__1.png
+Peugeot,207,2008 a 2015,arquivos/veiculos/capas/peugeot_207_2008_a_2015_2.png
+Peugeot,207,2009 a 2014,arquivos/veiculos/capas/peugeot_207_2009_a_2014_3.png
+Peugeot,207,2012 a 2013,arquivos/veiculos/capas/peugeot_207_2012_a_2013_4.png
+Peugeot,208,2012 a 2021,arquivos/veiculos/capas/peugeot_208_2012_a_2021_1.png
+Peugeot,208,2014 a 2019,arquivos/veiculos/capas/peugeot_208_2014_a_2019_2.png
+Peugeot,307,2005 a 2014,arquivos/veiculos/capas/peugeot_307_2005_a_2014_1.png
+Peugeot,307,2011 a 2013,arquivos/veiculos/capas/peugeot_307_2011_a_2013_2.png
+Peugeot,308,,arquivos/veiculos/capas/peugeot_308__1.png
+Peugeot,308,2008 a 2014,arquivos/veiculos/capas/peugeot_308_2008_a_2014_2.png
+Peugeot,308,2014,arquivos/veiculos/capas/peugeot_308_2014_3.png
+Peugeot,408,2011 a 2017,arquivos/veiculos/capas/peugeot_408_2011_a_2017_1.png
+Peugeot,Allure,2021 a 2023,arquivos/veiculos/capas/peugeot_allure_2021_a_2023_1.png
+Peugeot,Allure,2021 a 2023,arquivos/veiculos/capas/peugeot_allure_2021_a_2023_2.png
+Peugeot,Boxer,2014 a 2015,arquivos/veiculos/capas/peugeot_boxer_2014_a_2015_1.png
+Peugeot,Citroen,,arquivos/veiculos/capas/peugeot_citroen__1.png
+Peugeot,Citroen,2008 a 2022,arquivos/veiculos/capas/peugeot_citroen_2008_a_2022_2.png
+Peugeot,Citroen,2008 a 2012,arquivos/veiculos/capas/peugeot_citroen_2008_a_2012_3.png
+RAM,2500,2012 a 2013,arquivos/veiculos/capas/ram_2500_2012_a_2013_1.png
+RAM,Rampage,2024 a 2025,arquivos/veiculos/capas/ram_rampage_2024_a_2025_1.png
+RAM,Rampage,2023 a 2025,arquivos/veiculos/capas/ram_rampage_2023_a_2025_2.png
+Renault,Campus,2001 a 2015,arquivos/veiculos/capas/renault_campus_2001_a_2015_1.png
+Renault,Captur,2017 a 2023,arquivos/veiculos/capas/renault_captur_2017_a_2023_1.png
+Renault,Captur,2017 a 2019,arquivos/veiculos/capas/renault_captur_2017_a_2019_2.png
+Renault,Captur,2018 a 2021,arquivos/veiculos/capas/renault_captur_2018_a_2021_3.png
+Renault,Clio,2001 a 2004,arquivos/veiculos/capas/renault_clio_2001_a_2004_1.png
+Renault,Clio,2005 a 2016,arquivos/veiculos/capas/renault_clio_2005_a_2016_2.png
+Renault,Clio,2008 a 2016,arquivos/veiculos/capas/renault_clio_2008_a_2016_3.png
+Renault,Duster,2011 a 2026,arquivos/veiculos/capas/renault_duster_2011_a_2026_1.png
+Renault,Duster,2014,arquivos/veiculos/capas/renault_duster_2014_2.png
+Renault,Fluence,2011 a 2014,arquivos/veiculos/capas/renault_fluence_2011_a_2014_1.png
+Renault,Fluence,2012 a 2016,arquivos/veiculos/capas/renault_fluence_2012_a_2016_2.png
+Renault,Kwid,2017 a 2018,arquivos/veiculos/capas/renault_kwid_2017_a_2018_1.png
+Renault,Kwid,2019 a 2023,arquivos/veiculos/capas/renault_kwid_2019_a_2023_2.png
+Renault,Logan,2010 a 2014,arquivos/veiculos/capas/renault_logan_2010_a_2014_1.png
+Renault,Logan,2017 a 2019,arquivos/veiculos/capas/renault_logan_2017_a_2019_2.png
+Renault,Master,2014,arquivos/veiculos/capas/renault_master_2014_1.png
+Renault,Master,2014 a 2019,arquivos/veiculos/capas/renault_master_2014_a_2019_2.png
+Renault,Master,2014 a 2024,arquivos/veiculos/capas/renault_master_2014_a_2024_3.png
+Renault,Master,2014 a 2017,arquivos/veiculos/capas/renault_master_2014_a_2017_4.png
+Renault,Megane,1999 a 2005,arquivos/veiculos/capas/renault_megane_1999_a_2005_1.png
+Renault,Megane,2006 a 2011,arquivos/veiculos/capas/renault_megane_2006_a_2011_2.png
+Renault,Megane,2008 a 2012,arquivos/veiculos/capas/renault_megane_2008_a_2012_3.png
+Renault,Oroch,2018,arquivos/veiculos/capas/renault_oroch_2018_1.png
+Renault,Sandero,2008 a 2016,arquivos/veiculos/capas/renault_sandero_2008_a_2016_1.png
+Renault,Sandero,2018 a 2020,arquivos/veiculos/capas/renault_sandero_2018_a_2020_2.png
+Renault,Scenic,1995 a 2011,arquivos/veiculos/capas/renault_scenic_1995_a_2011_1.png
+Renault,Symbol,2006 a 2012,arquivos/veiculos/capas/renault_symbol_2006_a_2012_1.png
+Rover,Sport,2010 a 2016,arquivos/veiculos/capas/rover_sport_2010_a_2016_1.png
+Rover,Sport,2013,arquivos/veiculos/capas/rover_sport_2013_2.png
+Subaru,Forester,2007 a 2014,arquivos/veiculos/capas/subaru_forester_2007_a_2014_1.png
+Subaru,Forester,2008 a 2010,arquivos/veiculos/capas/subaru_forester_2008_a_2010_2.png
+Subaru,Forester,2010 a 2012,arquivos/veiculos/capas/subaru_forester_2010_a_2012_3.png
+Subaru,Impreza,2007 a 2011,arquivos/veiculos/capas/subaru_impreza_2007_a_2011_1.png
+Subaru,Impreza,2007 a 2012,arquivos/veiculos/capas/subaru_impreza_2007_a_2012_2.png
+Subaru,Impreza,2008 a 2010,arquivos/veiculos/capas/subaru_impreza_2008_a_2010_3.png
+Subaru,Impreza,2008 a 2014,arquivos/veiculos/capas/subaru_impreza_2008_a_2014_4.png
+Subaru,Impreza,2009 a 2010,arquivos/veiculos/capas/subaru_impreza_2009_a_2010_5.png
+Suzuki,Intrude,2010,arquivos/veiculos/capas/suzuki_intrude_2010_1.png
+Suzuki,Intruder,2007 a 2010,arquivos/veiculos/capas/suzuki_intruder_2007_a_2010_1.png
+Suzuki,Intruder,2008 a 2009,arquivos/veiculos/capas/suzuki_intruder_2008_a_2009_2.png
+Toyota,Corolla,,arquivos/veiculos/capas/toyota_corolla__1.png
+Toyota,Corolla,2013 a 2019,arquivos/veiculos/capas/toyota_corolla_2013_a_2019_2.png
+Toyota,Corolla,2019,arquivos/veiculos/capas/toyota_corolla_2019_3.png
+Toyota,Corolla,2021 a 2023,arquivos/veiculos/capas/toyota_corolla_2021_a_2023_4.png
+Toyota,Etios,2013 a 2017,arquivos/veiculos/capas/toyota_etios_2013_a_2017_1.png
+Toyota,Etios,2014 a 2023,arquivos/veiculos/capas/toyota_etios_2014_a_2023_2.png
+Toyota,Hilux,2006 a 2012,arquivos/veiculos/capas/toyota_hilux_2006_a_2012_1.png
+Toyota,Yaris,2019 a 2020,arquivos/veiculos/capas/toyota_yaris_2019_a_2020_1.png
+Toyota,Yaris,2020 a 2024,arquivos/veiculos/capas/toyota_yaris_2020_a_2024_2.png
+Volkswagen,Amarok,2017 a 2020,arquivos/veiculos/capas/volkswagen_amarok_2017_a_2020_1.png
+Volkswagen,Crossfox,2011 a 2014,arquivos/veiculos/capas/volkswagen_crossfox_2011_a_2014_1.png
+Volkswagen,Crossfox,2011 a 2021,arquivos/veiculos/capas/volkswagen_crossfox_2011_a_2021_2.png
+Volkswagen,Fox,2010 a 2022,arquivos/veiculos/capas/volkswagen_fox_2010_a_2022_1.png
+Volkswagen,Fox,2016 a 2022,arquivos/veiculos/capas/volkswagen_fox_2016_a_2022_2.png
+Volkswagen,Fusca,1959 a 1977,arquivos/veiculos/capas/volkswagen_fusca_1959_a_1977_1.png
+Volkswagen,Fusca,1978 a 1996,arquivos/veiculos/capas/volkswagen_fusca_1978_a_1996_2.png
+Volkswagen,Gol,,arquivos/veiculos/capas/volkswagen_gol__1.png
+Volkswagen,Gol,2004 a 2005,arquivos/veiculos/capas/volkswagen_gol_2004_a_2005_2.png
+Volkswagen,Golf,,arquivos/veiculos/capas/volkswagen_golf__1.png
+Volkswagen,Golf,2000 a 2006,arquivos/veiculos/capas/volkswagen_golf_2000_a_2006_2.png
+Volkswagen,Golf,2014 a 2016,arquivos/veiculos/capas/volkswagen_golf_2014_a_2016_3.png
+Volkswagen,Golf,2015 a 2018,arquivos/veiculos/capas/volkswagen_golf_2015_a_2018_4.png
+Volkswagen,Jetta,2011 a 2013,arquivos/veiculos/capas/volkswagen_jetta_2011_a_2013_1.png
+Volkswagen,Jetta,2018 a 2020,arquivos/veiculos/capas/volkswagen_jetta_2018_a_2020_2.png
+Volkswagen,Linha,2003 a 2014,arquivos/veiculos/capas/volkswagen_linha_2003_a_2014_1.png
+Volkswagen,Nivus,2020,arquivos/veiculos/capas/volkswagen_nivus_2020_1.png
+Volkswagen,Parati,1996 a 2005,arquivos/veiculos/capas/volkswagen_parati_1996_a_2005_1.png
+Volkswagen,Passat,1979 a 1982,arquivos/veiculos/capas/volkswagen_passat_1979_a_1982_1.png
+Volkswagen,Polo,,arquivos/veiculos/capas/volkswagen_polo__1.png
+Volkswagen,Polo,2008 a 2012,arquivos/veiculos/capas/volkswagen_polo_2008_a_2012_2.png
+Volkswagen,Polo,2016 a 2018,arquivos/veiculos/capas/volkswagen_polo_2016_a_2018_3.png
+Volkswagen,Polo,2018 a 2022,arquivos/veiculos/capas/volkswagen_polo_2018_a_2022_4.png
+Volkswagen,Santana,1990 a 2000,arquivos/veiculos/capas/volkswagen_santana_1990_a_2000_1.png
+Volkswagen,Saveiro,1994 a 2002,arquivos/veiculos/capas/volkswagen_saveiro_1994_a_2002_1.png
+Volkswagen,Saveiro,2016 a 2023,arquivos/veiculos/capas/volkswagen_saveiro_2016_a_2023_2.png
+Volkswagen,Spacecross,2010 a 2018,arquivos/veiculos/capas/volkswagen_spacecross_2010_a_2018_1.png
+Volkswagen,Spacecross,2010 a 2015,arquivos/veiculos/capas/volkswagen_spacecross_2010_a_2015_2.png
+Volkswagen,Spacecross,2014 a 2016,arquivos/veiculos/capas/volkswagen_spacecross_2014_a_2016_3.png
+Volkswagen,Spacecross,2015 a 2016,arquivos/veiculos/capas/volkswagen_spacecross_2015_a_2016_4.png
+Volkswagen,Spacecross,2015 a 2017,arquivos/veiculos/capas/volkswagen_spacecross_2015_a_2017_5.png
+Volkswagen,Spacefox,2010 a 2020,arquivos/veiculos/capas/volkswagen_spacefox_2010_a_2020_1.png
+Volkswagen,Spacefox,2015 a 2017,arquivos/veiculos/capas/volkswagen_spacefox_2015_a_2017_2.png
+Volkswagen,T,,arquivos/veiculos/capas/volkswagen_t__1.png
+Volkswagen,T,2019 a 2021,arquivos/veiculos/capas/volkswagen_t_2019_a_2021_2.png
+Volkswagen,T,2019 a 2026,arquivos/veiculos/capas/volkswagen_t_2019_a_2026_3.png
+Volkswagen,T,2019 a 2023,arquivos/veiculos/capas/volkswagen_t_2019_a_2023_4.png
+Volkswagen,Tiguan,2010 a 2017,arquivos/veiculos/capas/volkswagen_tiguan_2010_a_2017_1.png
+Volkswagen,Up,2014 a 2022,arquivos/veiculos/capas/volkswagen_up_2014_a_2022_1.png
+Volkswagen,Virtus,2017 a 2022,arquivos/veiculos/capas/volkswagen_virtus_2017_a_2022_1.png
+Volkswagen,Voyage,2011 a 2021,arquivos/veiculos/capas/volkswagen_voyage_2011_a_2021_1.png
+Volkswagen,Voyage,2016 a 2022,arquivos/veiculos/capas/volkswagen_voyage_2016_a_2022_2.png
+Volkswagen,Voyage,2018 a 2022,arquivos/veiculos/capas/volkswagen_voyage_2018_a_2022_3.png
+Volvo,Xc60,2014 a 2016,arquivos/veiculos/capas/volvo_xc60_2014_a_2016_1.png

@@ -1,42 +1,24 @@
 import io
 import re
 import unicodedata
-from html.parser import HTMLParser
 
 import requests
 from PIL import Image
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
-GOOGLE_IMAGES_URL = "https://www.google.com/search"
-SEARCH_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
-    )
+SEARCH_HEADERS = {"User-Agent": "autopecas-image-generator/1.0"}
+MAX_BACKGROUND_CHECKS = 6
+# Photos that do not show the stock car from outside (race cars, interiors, engines, wrecks).
+EXCLUDED_LABEL_WORDS = {
+    "nascar", "wrc", "rally", "rallye", "race", "racing", "racecar", "dtm", "stock", "drift",
+    "rear", "interior", "dashboard", "cockpit", "engine", "motor", "trunk", "wheel", "badge", "logo",
+    "emblem", "crash", "wreck", "damaged", "police", "taxi", "model", "toy", "diecast", "concept",
 }
 
 
 class VehicleSearchError(RuntimeError):
     pass
-
-
-class _GoogleImageParser(HTMLParser):
-    """Collect result thumbnails and their labels from Google Images HTML."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.results: list[tuple[str, str]] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag != "img":
-            return
-        values = dict(attrs)
-        title = " ".join((values.get("alt") or "", values.get("title") or ""))
-        for key in ("src", "data-src"):
-            url = values.get(key) or ""
-            if "encrypted-tbn" in url and "gstatic.com/images" in url:
-                self.results.append((url, title))
 
 
 def _normalized_words(value: str) -> set[str]:
@@ -46,21 +28,27 @@ def _normalized_words(value: str) -> set[str]:
 
 def _requested_years(query: str) -> set[int]:
     years = sorted({int(value) for value in re.findall(r"\b(?:19|20)\d{2}\b", query)})
-    if len(years) >= 2 and years[-1] - years[0] <= 12:
+    if len(years) >= 2 and years[-1] - years[0] <= 15:
         return set(range(years[0], years[-1] + 1))
     return set(years)
 
 
 def _matches_vehicle_label(label: str, query: str, years: set[int]) -> bool:
+    """The label must name the make and model; if it names a year, it must be in range."""
     label_words = _normalized_words(label)
     query_words = _normalized_words(query) - {str(year) for year in years}
     generic = {"car", "cars", "vehicle", "white", "background", "isolated", "photo", "image"}
     required = query_words - generic
     if not required or not required.issubset(label_words):
         return False
-    if years and not (years & {int(word) for word in label_words if word.isdigit()}):
+    if label_words & EXCLUDED_LABEL_WORDS:
         return False
-    return True
+    label_years = {int(word) for word in label_words if re.fullmatch(r"(?:19|20)\d{2}", word)}
+    return not (years and label_years and not years & label_years)
+
+
+def _label_has_year(label: str, years: set[int]) -> bool:
+    return bool(years & {int(word) for word in _normalized_words(label) if word.isdigit()})
 
 
 def _has_white_corners(image_bytes: bytes) -> bool:
@@ -100,35 +88,7 @@ def _download_has_white_background(url: str) -> bool:
         return False
 
 
-def _google_candidates(query: str, years: set[int]) -> list[tuple[str, str]]:
-    query_years = sorted(years) if years else [None]
-    candidates: list[tuple[str, str]] = []
-    seen = set()
-    for year in query_years:
-        search = f"{query} {year}" if year else query
-        search = f"{search} car isolated white background"
-        try:
-            response = requests.get(
-                GOOGLE_IMAGES_URL,
-                params={"tbm": "isch", "q": search},
-                headers=SEARCH_HEADERS,
-                timeout=10,
-            )
-        except requests.RequestException:
-            continue
-        if not response.ok:
-            continue
-        parser = _GoogleImageParser()
-        parser.feed(response.text)
-        for url, label in parser.results:
-            if url not in seen:
-                candidates.append((url, label))
-                seen.add(url)
-    return candidates
-
-
-def _commons_candidates(query: str, years: set[int]) -> list[tuple[str, str]]:
-    search_query = f"{query} {' '.join(map(str, sorted(years)))} car white background".strip()
+def _commons_search(search_query: str) -> list[tuple[str, str]]:
     try:
         response = requests.get(
             COMMONS_API,
@@ -138,43 +98,70 @@ def _commons_candidates(query: str, years: set[int]) -> list[tuple[str, str]]:
                 "generator": "search",
                 "gsrsearch": search_query,
                 "gsrnamespace": 6,
-                "gsrlimit": 30,
+                "gsrlimit": 20,
                 "prop": "imageinfo",
-                "iiprop": "url|mime|thumburl",
+                "iiprop": "url|mime",
                 "iiurlwidth": 1200,
             },
-            headers={"User-Agent": "autopecas-image-generator/1.0"},
+            headers=SEARCH_HEADERS,
             timeout=15,
         )
         response.raise_for_status()
-    except requests.RequestException:
+        pages = response.json().get("query", {}).get("pages", {}).values()
+    except (requests.RequestException, ValueError):
         return []
-    pages = response.json().get("query", {}).get("pages", {}).values()
     candidates = []
-    for page in pages:
-        image_info = page.get("imageinfo", [{}])[0]
+    for page in sorted(pages, key=lambda item: item.get("index", 0)):
+        image_info = (page.get("imageinfo") or [{}])[0]
         url = image_info.get("thumburl") or image_info.get("url", "")
-        label = page.get("title", "")
-        if image_info.get("mime", "").startswith("image/") and url:
-            candidates.append((url, label))
+        if image_info.get("mime", "") in ("image/jpeg", "image/png", "image/webp") and url:
+            candidates.append((url, page.get("title", "")))
+    return candidates
+
+
+def _commons_candidates(query: str, years: set[int]) -> list[tuple[str, str]]:
+    """Search Wikimedia Commons one year at a time (multi-year queries return nothing)."""
+    searches = [f"{query} {year}" for year in sorted(years)] + [query]
+    candidates: list[tuple[str, str]] = []
+    seen = set()
+    for search in searches:
+        for url, label in _commons_search(search):
+            if url not in seen:
+                candidates.append((url, label))
+                seen.add(url)
     return candidates
 
 
 def find_vehicle_image(query: str) -> str:
-    """Return only a year-matching candidate whose downloaded image has a white background."""
+    """Return the best matching vehicle photo."""
+    return find_vehicle_images(query, limit=1)[0]
+
+
+def find_vehicle_images(query: str, limit: int = 10) -> list[str]:
+    """Return matching vehicle photos, best first: year matches, then white backgrounds.
+
+    The cover pipeline removes the background automatically, so photos without a white
+    background are still acceptable; the user picks and approves one before it is used.
+    """
     years = _requested_years(query)
     query_without_years = re.sub(r"\b(?:19|20)\d{2}\b", " ", query)
-    query_without_years = re.sub(r"\s+", " ", query_without_years).strip()
-    candidates = _google_candidates(query_without_years, years)
-    for url, label in candidates:
-        if _matches_vehicle_label(label, query_without_years, years) and _download_has_white_background(url):
-            return url
-
-    for url, label in _commons_candidates(query_without_years, years):
-        if _matches_vehicle_label(label, query_without_years, years) and _download_has_white_background(url):
-            return url
-
-    raise VehicleSearchError(
-        f"Não encontrei imagem validada em fundo branco para {query}. "
-        "Envie uma imagem manualmente para continuar."
-    )
+    # Drop range connectors left behind: "2007-2009", "2007 a 2009", "2007 até 2009".
+    query_without_years = re.sub(r"(?:^|\s)(?:[-–/]|a|ate|até|to)(?=\s|$)", " ", query_without_years,
+                                 flags=re.IGNORECASE)
+    query_without_years = re.sub(r"\s+", " ", query_without_years).strip(" -–/")
+    matches = [
+        (url, label)
+        for url, label in _commons_candidates(query_without_years, years)
+        if _matches_vehicle_label(label, query_without_years, years)
+    ]
+    if years:
+        with_year = [item for item in matches if _label_has_year(item[1], years)]
+        matches = with_year or matches
+    if not matches:
+        raise VehicleSearchError(
+            f"Não encontrei imagem de {query} na internet. "
+            "Envie uma imagem manualmente para continuar."
+        )
+    urls = [url for url, _ in matches]
+    white = [url for url in urls[:MAX_BACKGROUND_CHECKS] if _download_has_white_background(url)]
+    return (white + [url for url in urls if url not in white])[:limit]

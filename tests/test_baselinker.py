@@ -41,6 +41,24 @@ def test_update_images_preserves_extra_positions(monkeypatch):
     }
 
 
+def test_find_product_matches_sku_registered_with_leading_space(monkeypatch):
+    client = BaseLinkerClient("token", "inventory", "https://example.test")
+    filters = []
+
+    def fake_call(method, parameters):
+        if method == "getInventoryProductsList":
+            filters.append(parameters["filter_sku"])
+            if parameters["filter_sku"] == " 00010276":
+                return {"status": "SUCCESS", "products": {"127": {"id": 127, "sku": " 00010276"}}}
+            return {"status": "SUCCESS", "products": {}}
+        return {"status": "SUCCESS", "products": {"127": {"sku": " 00010276", "images": {}}}}
+
+    monkeypatch.setattr(client, "call", fake_call)
+    product_id, product = client.find_product("00010276")
+    assert product_id == "127"
+    assert filters == ["00010276", " 00010276"]
+
+
 def test_backup_and_restore(tmp_path, monkeypatch):
     client = BaseLinkerClient("token", "inventory", "https://example.test")
     backup = client.save_images_backup("SKU-1", "42", ["url:https://old/1"], tmp_path)

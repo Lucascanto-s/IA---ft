@@ -42,8 +42,51 @@ def _rembg_session():
     if _REMBG_SESSION is None:
         from rembg import new_session
 
-        _REMBG_SESSION = new_session("u2netp")
+        # isnet-general-use gives much cleaner edges than u2netp (downloads ~170 MB on first use).
+        _REMBG_SESSION = new_session(os.getenv("REMBG_MODEL", "isnet-general-use"))
     return _REMBG_SESSION
+
+
+def _keep_main_subject(image: Image.Image, min_alpha: int = 24) -> Image.Image:
+    """Drop faint halos and every detached blob except the largest (e.g. a second car)."""
+    from scipy import ndimage
+
+    rgba = np.array(image.convert("RGBA"))
+    alpha = rgba[:, :, 3]
+    alpha[alpha < min_alpha] = 0
+    labels, count = ndimage.label(alpha > 127)
+    if count > 1:
+        sizes = ndimage.sum(np.ones_like(labels), labels, index=range(1, count + 1))
+        main = int(np.argmax(sizes)) + 1
+        # Grow the main blob slightly so its soft anti-aliased edge is kept.
+        keep = ndimage.binary_dilation(labels == main, iterations=3)
+        alpha[~keep] = 0
+    rgba[:, :, 3] = alpha
+    return Image.fromarray(rgba, "RGBA")
+
+
+def whiten_background(
+    image: Image.Image, min_value: int = 205, max_spread: int = 22, transparent: bool = False
+) -> Image.Image:
+    """Turn the near-white, gray-ish background touching the borders into pure white.
+
+    With transparent=True the background becomes transparent instead, so drop shadows
+    follow the subject's outline rather than its bounding box.
+    """
+    from scipy import ndimage
+
+    rgba = np.array(image.convert("RGBA"))
+    rgb = rgba[:, :, :3].astype(np.int16)
+    near_white = (rgb.min(axis=2) >= min_value) & (np.ptp(rgb, axis=2) <= max_spread)
+    labels, _ = ndimage.label(near_white)
+    border_labels = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    background = np.isin(labels, border_labels[border_labels > 0])
+    # Soften the transition so the part's edges are not jagged.
+    soft = ndimage.gaussian_filter(background.astype(np.float32), 1.0)[:, :, None]
+    rgba[:, :, :3] = (rgba[:, :, :3] * (1 - soft) + 255 * soft).astype(np.uint8)
+    if transparent:
+        rgba[:, :, 3] = np.minimum(rgba[:, :, 3], ((1 - soft[:, :, 0]) * 255).astype(np.uint8))
+    return Image.fromarray(rgba, "RGBA")
 
 
 def _download_path(source: str) -> Path:
@@ -151,6 +194,46 @@ def content_bands(image: Image.Image) -> list[tuple[int, int]]:
     return [band for band in bands if band[1] - band[0] >= minimum_band_height]
 
 
+def extract_vehicle_from_cover(image: Image.Image, allow_multiple: bool = False) -> Image.Image | None:
+    """Crop the vehicle strip from an edited cover (vehicle(s) on top, part below, white background).
+
+    Returns None when the image does not look like such a cover. With allow_multiple, a strip
+    holding several cars side by side is returned whole.
+    """
+    rgb = image.convert("RGB")
+    if rgb.size != CANVAS_SIZE:
+        rgb = rgb.resize(CANVAS_SIZE)
+    pixels = np.array(rgb)
+    if not has_white_background(rgb):
+        return None
+    width, height = rgb.size
+    # Ignore thin decorative strips glued to the top/bottom edges.
+    bands = [band for band in content_bands(rgb) if not (band[1] - band[0] < 40 and (band[0] < 5 or band[1] > height - 5))]
+    if not bands or bands[0][0] > height * 0.3:
+        return None
+    top, bottom = bands[0]
+    if bottom > height * 0.5:
+        # Vehicle and part touch: cut at the emptiest row between them.
+        counts = (pixels.min(axis=2) < 245).sum(axis=1)
+        low, high = int(height * 0.25), int(height * 0.45)
+        bottom = low + int(np.argmin(counts[low:high]))
+        if counts[bottom] > width * 0.04:
+            return None
+    elif len(bands) < 2:
+        return None  # a single strip on top is a plain photo, not a cover with a part below
+    strip = rgb.crop((0, max(0, top - 4), width, min(height, bottom + 4)))
+    bbox = content_bbox(strip, threshold=12)
+    if not bbox:
+        return None
+    vehicle = strip.crop(bbox)
+    ratio = vehicle.width / vehicle.height
+    # One car is roughly 1.4-2.5x wider than tall; wider strips usually hold several cars.
+    max_ratio = 8.0 if allow_multiple else 2.7
+    if vehicle.width < 250 or vehicle.height < 90 or not 1.3 <= ratio <= max_ratio:
+        return None
+    return vehicle.convert("RGBA")
+
+
 def create_composite_cover(image: Image.Image) -> Image.Image:
     canvas = Image.new("RGBA", CANVAS_SIZE, WHITE + (255,))
     composite = ImageOps.contain(remove_red_guides(image), CANVAS_SIZE)
@@ -168,7 +251,7 @@ def remove_background(image: Image.Image) -> Image.Image:
         session=_rembg_session(),
         force_return_bytes=True,
     )
-    return Image.open(io.BytesIO(result)).convert("RGBA")
+    return _keep_main_subject(Image.open(io.BytesIO(result)).convert("RGBA"))
 
 
 def fit_on_white(image: Image.Image, box: tuple[int, int, int, int]) -> Image.Image:
@@ -285,7 +368,12 @@ def render_layers(
         x = int(round(layer["x"]))
         y = int(round(layer["y"]))
         if layer.get("shadow"):
-            shadow_alpha = fitted.getchannel("A").filter(ImageFilter.GaussianBlur(14))
+            alpha = fitted.getchannel("A")
+            if alpha.getextrema()[0] == 255:
+                # Opaque image on white: cast the shadow from the subject, not from the box.
+                difference = ImageChops.difference(fitted.convert("RGB"), Image.new("RGB", fitted.size, WHITE))
+                alpha = difference.convert("L").point(lambda value: 255 if value > 18 else 0)
+            shadow_alpha = alpha.filter(ImageFilter.GaussianBlur(14))
             shadow_alpha = shadow_alpha.point(lambda value: int(value * 0.22))
             shadow = Image.new("RGBA", fitted.size, (40, 40, 40, 0))
             shadow.putalpha(shadow_alpha)
@@ -376,8 +464,10 @@ def validate_output(path: Path | Image.Image, tolerance: int = 24) -> dict[str, 
 
 def product_image(source: str) -> Image.Image:
     image = load_image(source)
-    if image.getchannel("A").getextrema()[0] < 255 or has_white_background(image):
+    if image.getchannel("A").getextrema()[0] < 255:
         return trim_white_borders(image)
+    if has_white_background(image):
+        return trim_white_borders(whiten_background(image))
     return trim_white_borders(remove_background(image))
 
 
@@ -388,8 +478,11 @@ def prepare_vehicle(vehicle_source: str) -> Image.Image:
 
 def prepare_vehicle_image(vehicle: Image.Image) -> Image.Image:
     vehicle = vehicle.convert("RGBA")
-    if vehicle.getchannel("A").getextrema()[0] == 255 and not has_white_background(vehicle):
-        vehicle = remove_background(vehicle)
+    if vehicle.getchannel("A").getextrema()[0] == 255:
+        if has_white_background(vehicle):
+            vehicle = whiten_background(vehicle, transparent=True)
+        else:
+            vehicle = remove_background(vehicle)
     return trim_white_borders(vehicle)
 
 
@@ -406,7 +499,8 @@ def compose_vehicle_group(vehicles: Iterable[Image.Image]) -> Image.Image:
     margin = 24
     gap = 12
     slot_width = (canvas_width - 2 * margin - gap * (len(images) - 1)) // len(images)
-    canvas = Image.new("RGBA", (canvas_width, top_height), WHITE + (255,))
+    # Transparent canvas: an opaque white one would cast a rectangular shadow on the cover.
+    canvas = Image.new("RGBA", (canvas_width, top_height), WHITE + (0,))
     for index, image in enumerate(images):
         fitted = ImageOps.contain(image, (max(1, slot_width - 8), top_height - 24))
         x = margin + index * (slot_width + gap) + (slot_width - fitted.width) // 2

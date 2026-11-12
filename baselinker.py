@@ -54,9 +54,20 @@ class BaseLinkerClient:
         return result
 
     def find_product(self, sku: str) -> tuple[str, dict[str, Any]]:
+        sku = sku.strip()
+        # filter_sku is an exact match, so also try SKUs registered with stray spaces.
+        for filter_value in (sku, f" {sku}", f"{sku} ", f" {sku} "):
+            try:
+                return self._find_product_exact(sku, filter_value)
+            except BaseLinkerError as error:
+                if not str(error).startswith("SKU nao encontrado"):
+                    raise
+        raise BaseLinkerError(f"SKU nao encontrado: {sku}")
+
+    def _find_product_exact(self, sku: str, filter_value: str) -> tuple[str, dict[str, Any]]:
         result = self.call(
             "getInventoryProductsList",
-            {"inventory_id": self.inventory_id, "filter_sku": sku},
+            {"inventory_id": self.inventory_id, "filter_sku": filter_value},
         )
         products_value = result.get("products", [])
         if isinstance(products_value, dict):
@@ -73,11 +84,11 @@ class BaseLinkerClient:
         product_id = None
         product = None
         for candidate_id, item in candidates:
-            if isinstance(item, dict) and item.get("sku") == sku:
+            if isinstance(item, dict) and str(item.get("sku", "")).strip() == sku:
                 product_id = str(item.get("product_id") or candidate_id)
                 product = item
                 break
-            if isinstance(item, str) and item == sku:
+            if isinstance(item, str) and item.strip() == sku:
                 product_id = str(candidate_id)
                 product = {"sku": item}
                 break

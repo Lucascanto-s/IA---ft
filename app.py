@@ -3,18 +3,22 @@ import io
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-from PIL import Image
+from PIL import Image, ImageOps
 
 from baselinker import BaseLinkerClient, BaseLinkerError, extract_image_urls
+from cover_import import find_related_covers, parse_name
 from image_processor import (
     compose_cover,
     compose_vehicle_group,
     create_set,
+    extract_vehicle_from_cover,
     load_image,
+    prepare_vehicle_image,
     product_image,
     public_urls,
     reposition_image,
@@ -23,7 +27,7 @@ from image_processor import (
 )
 from project_utils import normalized_tokens, sanitize_sku
 from ui.theme import apply_theme, flow_steps
-from vehicle_search import VehicleSearchError, find_vehicle_image
+from vehicle_search import VehicleSearchError, find_vehicle_images
 
 
 load_dotenv()
@@ -54,10 +58,55 @@ KNOWN_MODELS = {
     "nissan": ["Kicks", "Versa", "Sentra", "March", "Frontier"],
     "renault": ["Logan", "Sandero", "Duster", "Kwid", "Oroch", "Captur"],
     "jeep": ["Renegade", "Compass", "Commander", "Cherokee", "Wrangler"],
+    "subaru": ["Impreza", "Forester", "XV", "Outback", "Legacy", "WRX"],
 }
 
 
+def _display_name(value: str) -> str:
+    """'ford' -> 'Ford', '320i' stays '320i', 'BMW' stays 'BMW'."""
+    return " ".join(
+        word.capitalize() if word.isalpha() and (word.islower() or word.isupper() and len(word) > 3) else word
+        for word in value.split()
+    )
+
+
 def _initial_fitments(sku: str, product: dict) -> list[dict[str, str]]:
+    return [
+        {**row, "brand": _display_name(row["brand"]), "model": _display_name(row["model"])}
+        for row in _raw_initial_fitments(sku, product)
+    ]
+
+
+FAMILY_WORDS = {"serie", "series", "série", "classe", "class", "linha"}
+# Version codes such as 320i, 328i, 530d (BMW) or C180, E250 (Mercedes).
+VARIANT_CODE = re.compile(r"^(?:\d{3}[a-z]{1,3}|[a-z]\d{3}[a-z]{0,2})$", re.IGNORECASE)
+
+
+def _variant_codes(text: str) -> list[str]:
+    words = re.findall(r"[A-Za-z0-9]+", text)
+    return list(dict.fromkeys(word for word in words if VARIANT_CODE.match(word)))
+
+
+def _raw_initial_fitments(sku: str, product: dict) -> list[dict[str, str]]:
+    """One row per car: expands '320i 328i 335i' in the title into separate vehicles."""
+    rows = _title_fitments(sku, product)
+    raw_name = str((product.get("text_fields") or {}).get("name", "")) if isinstance(product, dict) else ""
+    codes = _variant_codes(raw_name)
+    brand = next((row["brand"] for row in rows if row.get("brand")), "")
+    if not codes or not brand:
+        return rows
+    years = next((row["years"] for row in rows if row.get("years")), "")
+    code_keys = {code.casefold() for code in codes}
+    kept = [
+        row for row in rows
+        if row["model"].casefold() not in code_keys
+        and not (normalized_tokens(row["model"]) & FAMILY_WORDS)
+        and not re.fullmatch(r"(?i)s[ée]rie\s*\d+", row["model"].strip())
+    ]
+    return kept + [{"brand": brand, "model": code, "years": years} for code in codes]
+
+
+def _title_fitments(sku: str, product: dict) -> list[dict[str, str]]:
     """Suggest separate make/model/year rows from the product title and local catalog."""
     map_row = vehicle_for_sku(sku) or {}
     query = map_row.get("vehicle_key", "").replace("_", " ").strip() or vehicle_query_from_product(product)
@@ -86,6 +135,33 @@ def _initial_fitments(sku: str, product: dict) -> list[dict[str, str]]:
             seen.add(key)
     if matches:
         return matches
+
+    # Titles often omit the brand ("Dobradiça Impreza"): infer it from a distinctive model name.
+    model_only = []
+    for brand, model in possible:
+        model_tokens = normalized_tokens(model)
+        key = (" ".join(sorted(normalized_tokens(brand))), " ".join(sorted(model_tokens)))
+        if (brand and model_tokens and len(model.replace(" ", "")) >= 4
+                and model_tokens.issubset(tokens) and key not in seen):
+            model_only.append({"brand": brand, "model": model, "years": year_range})
+            seen.add(key)
+    if model_only:
+        return model_only
+
+    # Generic make/model parser shared with the cover import (knows ~35 brands).
+    raw_name = str((product.get("text_fields") or {}).get("name", "")) if isinstance(product, dict) else ""
+    model_brands = {
+        normalized_model: brand.title() if brand.islower() else brand
+        for brand, model in possible
+        for normalized_model in [" ".join(sorted(normalized_tokens(model)))]
+        if brand and len(normalized_model) >= 4 and " " not in normalized_model
+    }
+    parsed = parse_name(raw_name or title, model_brands)
+    if parsed:
+        parsed_years = sorted(parsed.years) or years
+        parsed_range = (f"{parsed_years[0]}-{parsed_years[-1]}" if len(parsed_years) > 1
+                        else (str(parsed_years[0]) if parsed_years else ""))
+        return [{"brand": parsed.brand, "model": parsed.model, "years": parsed_range}]
 
     # Fall back to one editable suggestion when the model is not in the known list.
     brand = next((name.title() for name in KNOWN_MODELS if normalized_tokens(name).issubset(tokens)), "")
@@ -121,6 +197,9 @@ def vehicle_query_from_product(product: dict) -> str:
                 "direita", "direito", "dianteiro", "esquerda", "esquerdo", "para",
                 "peca", "peça", "traseiro", "traseira", "suporte", "trava", "tubo",
                 "cano", "alta", "pressao", "pressão", "mangueira", "conjunto",
+                "par", "dobradica", "dobradiça", "porta", "fechadura", "eletrica",
+                "elétrica", "tensor", "correia", "carcaca", "carcaça", "valvula",
+                "válvula", "termostatica", "termostática",
             }
             filtered = [
                 word for word in words
@@ -136,8 +215,14 @@ def vehicle_query_from_product(product: dict) -> str:
 
 
 def local_vehicle_for_fitment(brand: str, model: str, years: str = "") -> str:
+    matches = local_vehicles_for_fitment(brand, model, years)
+    return matches[0] if matches else ""
+
+
+def local_vehicles_for_fitment(brand: str, model: str, years: str = "") -> list[str]:
+    """All catalog images for this make/model whose years overlap, best match first."""
     if not VEHICLE_LIBRARY_FILE.exists():
-        return ""
+        return []
     requested_years = _years(years)
     brand_key = normalized_tokens(brand)
     model_key = normalized_tokens(model)
@@ -161,7 +246,7 @@ def local_vehicle_for_fitment(brand: str, model: str, years: str = "") -> str:
                     year_overlap = len(requested_years.intersection(row_years))
                     has_year_match = int(bool(year_overlap))
                     candidates.append((exact_years, has_year_match, year_overlap, -len(row_years), str(resolved_path)))
-    return max(candidates)[4] if candidates else ""
+    return list(dict.fromkeys(candidate[4] for candidate in sorted(candidates, reverse=True)))
 
 
 def client() -> BaseLinkerClient:
@@ -310,25 +395,41 @@ def _search_fitments(pending: dict, fitments: list[dict[str, str]]) -> list[dict
     map_row = vehicle_for_sku(pending.get("source_sku", pending["sku"])) or {}
     choices = []
     sku_source = map_row.get("vehicle_image_url", "").strip()
-    for fitment in fitments:
+    # Cars already used on covers of other products for the same vehicle come first.
+    related: list[tuple[str, Path]] = []
+    title = str((pending.get("product", {}).get("text_fields") or {}).get("name", ""))
+    if title:
+        try:
+            related = find_related_covers(client(), title, pending.get("product_id", ""))
+        except Exception:
+            related = []
+    for position, fitment in enumerate(fitments):
         brand = str(fitment.get("brand", "")).strip()
         model = str(fitment.get("model", "")).strip()
         years = str(fitment.get("years", "")).strip()
         if not brand or not model:
             continue
-        source = local_vehicle_for_fitment(brand, model, years)
-        origin = "Catálogo local" if source else ""
-        if not source and sku_source and len(fitments) == 1:
-            source = sku_source
-            origin = "Imagem cadastrada para este SKU"
-        if not source:
+        alternatives: list[str] = []
+        origins: list[str] = []
+        if position == 0:
+            alternatives += [str(path) for _, path in related]
+            origins += [f"Capa do SKU {sku} (BaseLinker)" for sku, _ in related]
+        local = local_vehicles_for_fitment(brand, model, years)
+        alternatives += local
+        origins += ["Catálogo local"] * len(local)
+        if not alternatives and sku_source and len(fitments) == 1:
+            alternatives, origins = [sku_source], ["Imagem cadastrada para este SKU"]
+        error_message = ""
+        if not alternatives:
             try:
                 query = " ".join(part for part in (brand, model, years) if part)
-                source = find_vehicle_image(query)
-                origin = "Busca online"
+                online = find_vehicle_images(query)
+                alternatives += online
+                origins += ["Busca online"] * len(online)
             except Exception as error:
-                source = ""
-                origin = str(error)
+                error_message = str(error)
+        source = alternatives[0] if alternatives else ""
+        origin = origins[0] if origins else error_message
         choices.append({
             "brand": brand,
             "model": model,
@@ -337,6 +438,9 @@ def _search_fitments(pending: dict, fitments: list[dict[str, str]]) -> list[dict
             "origin": origin,
             "status": "pending" if source else "missing",
             "image": None,
+            "alternatives": alternatives,
+            "alternative_origins": origins,
+            "alternative_index": 0,
         })
     return choices
 
@@ -408,6 +512,23 @@ def _current_previews(result: dict) -> list[Image.Image]:
     return previews
 
 
+def google_images_url(choice: dict, transparent: bool = False) -> str:
+    """Google Images search opened in the user's own browser, filtered by background."""
+    years = sorted(_years(str(choice.get("years", ""))))
+    year_text = f"{years[0]} {years[-1]}" if len(years) > 1 else (str(years[0]) if years else "")
+    query = " ".join(part for part in (choice.get("brand", ""), choice.get("model", ""), year_text) if part)
+    query += " png" if transparent else " fundo branco"
+    tbs = "ic:trans" if transparent else "ic:specific,isc:white"
+    return "https://www.google.com/search?" + urlencode({"udm": "2", "hl": "pt-BR", "tbs": tbs, "q": query})
+
+
+def _framed(image: Image.Image) -> Image.Image:
+    """Screen-only black border so the white canvas does not blend into the page."""
+    flat = Image.new("RGBA", image.size, (255, 255, 255, 255))
+    flat.alpha_composite(image.convert("RGBA"))
+    return ImageOps.expand(flat.convert("RGB"), border=4, fill="black")
+
+
 def _save_final_images(result: dict, previews: list[Image.Image]) -> None:
     for path, image in zip(result["paths"], previews):
         sharpen(image).convert("RGB").save(path, quality=98, subsampling=0)
@@ -422,6 +543,64 @@ def _editor_text(value) -> str:
     return "" if pd.isna(value) else str(value).strip()
 
 
+def _cars_from_sku_cover(sku: str) -> Image.Image:
+    """Crop the vehicle strip (one or more cars) from image 1 of another SKU."""
+    _, product = client().find_product(sku)
+    urls = extract_image_urls(product.get("images", product))
+    if not urls:
+        raise ValueError(f"O SKU {sku} não tem imagens")
+    cars = extract_vehicle_from_cover(load_image(urls[0]), allow_multiple=True)
+    if cars is None:
+        raise ValueError(
+            f"A imagem 1 do SKU {sku} não parece uma capa com carro em cima e peça embaixo, em fundo branco"
+        )
+    return cars
+
+
+def _render_copy_cars_from_sku(pending: dict) -> None:
+    state_key = f"copied_cars_{pending['sku']}"
+    with st.expander("Usar os carros da capa de outro SKU", expanded=bool(st.session_state.get(state_key))):
+        st.caption("Pega a imagem 1 de outro anúncio, remove a peça e usa só os carros na capa deste SKU.")
+        sku_col, button_col = st.columns([3, 1])
+        with sku_col:
+            other_sku = st.text_input("SKU com a capa pronta", placeholder="00002185",
+                                      key=f"copy_cars_sku_{pending['sku']}").strip()
+        with button_col:
+            st.write("")
+            st.write("")
+            fetch = st.button("Buscar capa", key=f"copy_cars_fetch_{pending['sku']}", width="stretch")
+        if fetch:
+            if not other_sku:
+                st.error("Informe o SKU.")
+            else:
+                try:
+                    with st.spinner(f"Lendo a capa do SKU {other_sku}..."):
+                        st.session_state[state_key] = {"sku": other_sku, "image": _cars_from_sku_cover(other_sku)}
+                except (BaseLinkerError, ValueError, OSError) as error:
+                    st.session_state.pop(state_key, None)
+                    st.error(str(error))
+        copied = st.session_state.get(state_key)
+        if copied:
+            st.image(_framed(copied["image"]), caption=f"Carros da capa do SKU {copied['sku']}", width="stretch",
+                     alt=f"Carros recortados da capa do SKU {copied['sku']}")
+            if st.button("Usar estes carros na capa", type="primary", key=f"copy_cars_use_{pending['sku']}"):
+                pending["choices"] = [{
+                    "brand": "Carros da capa do SKU",
+                    "model": copied["sku"],
+                    "years": "",
+                    "source": f"capa do SKU {copied['sku']}",
+                    "origin": f"Capa do SKU {copied['sku']}",
+                    "status": "approved",
+                    "image": copied["image"],
+                    "cutout": None,
+                    "alternatives": [],
+                    "alternative_index": 0,
+                }]
+                st.session_state["pending_vehicle_review"] = pending
+                st.session_state.pop(state_key, None)
+                st.rerun()
+
+
 def _render_vehicle_review() -> None:
     pending = st.session_state.get("pending_vehicle_review")
     if not pending:
@@ -429,6 +608,7 @@ def _render_vehicle_review() -> None:
 
     st.subheader(f"Veículos compatíveis · SKU {pending['sku']}")
     st.caption("Uma linha por carro. Cada linha será procurada no catálogo local antes da busca online.")
+    _render_copy_cars_from_sku(pending)
 
     if pending["choices"] is None:
         st.write("Confirme a marca, o modelo e os anos antes de pesquisar as imagens.")
@@ -478,12 +658,24 @@ def _render_vehicle_review() -> None:
 
     labels = [_fitment_label(choice) for choice in choices]
     review_tab, manual_tab = st.tabs(["Validar imagem buscada", "Adicionar ou substituir manualmente"])
+    review_key = f"review_vehicle_{pending['sku']}"
+    next_key = f"review_next_{pending['sku']}"
+    if next_key in st.session_state:
+        st.session_state[review_key] = st.session_state.pop(next_key)
+
+    def _go_to_next_pending(current: int) -> None:
+        order = list(range(current + 1, len(choices))) + list(range(0, current))
+        for index in order:
+            if choices[index]["status"] not in ("approved", "discarded"):
+                st.session_state[next_key] = index
+                return
+
     with review_tab:
         selected = st.selectbox(
             "Veículo para validar",
             options=list(range(len(choices))),
             format_func=lambda index: f"{labels[index]} · {choices[index]['status']}",
-            key=f"review_vehicle_{pending['sku']}",
+            key=review_key,
         )
         choice = choices[selected]
         if not isinstance(choice.get("source"), str):
@@ -504,17 +696,47 @@ def _render_vehicle_review() -> None:
             try:
                 if choice["image"] is None:
                     choice["image"] = load_image(choice["source"])
-                st.image(
-                    choice["image"],
-                    caption=f"Imagem para {labels[selected]}",
-                    width="stretch",
-                    alt=f"Prévia do veículo {labels[selected]}",
-                )
+                    choice["cutout"] = None
+                if choice.get("cutout") is None:
+                    with st.spinner("Recortando o veículo..."):
+                        cutout = prepare_vehicle_image(choice["image"])
+                        choice["cutout"] = ImageOps.pad(
+                            cutout.convert("RGBA"), (900, 450), color=(255, 255, 255, 255)
+                        )
+                original_col, cutout_col = st.columns(2)
+                with original_col:
+                    st.image(_framed(choice["image"]), caption="Foto encontrada", width="stretch",
+                             alt=f"Foto original do veículo {labels[selected]}")
+                with cutout_col:
+                    st.image(_framed(choice["cutout"]), caption="Como vai ficar na capa", width="stretch",
+                             alt=f"Veículo {labels[selected]} recortado")
             except (OSError, ValueError) as error:
                 st.error(f"Não consegui abrir essa imagem: {error}")
                 choice["status"] = "missing"
         else:
             st.info("Não há imagem para validar. Use a aba de imagem manual ou descarte este veículo.")
+
+        alternatives = choice.get("alternatives") or []
+        if len(alternatives) > 1 and choice["status"] in ("pending", "missing"):
+            position = choice.get("alternative_index", 0)
+            if st.button(
+                f"Ver outra opção ({position + 1} de {len(alternatives)})",
+                key=f"next_alternative_{pending['sku']}_{selected}",
+            ):
+                position = (position + 1) % len(alternatives)
+                alternative_origins = choice.get("alternative_origins") or []
+                choice.update({
+                    "alternative_index": position,
+                    "origin": alternative_origins[position] if position < len(alternative_origins)
+                    else choice["origin"],
+                    "source": alternatives[position],
+                    "image": None,
+                    "status": "pending",
+                })
+                choices[selected] = choice
+                pending["choices"] = choices
+                st.session_state["pending_vehicle_review"] = pending
+                st.rerun()
 
         save_online = False
         if choice["status"] != "discarded" and choice["source"] and choice["origin"] == "Busca online":
@@ -541,6 +763,7 @@ def _render_vehicle_review() -> None:
                 choices[selected] = choice
                 pending["choices"] = choices
                 st.session_state["pending_vehicle_review"] = pending
+                _go_to_next_pending(selected)
                 st.rerun()
         with discard_col:
             if st.button("Descartar imagem", key=f"discard_vehicle_{pending['sku']}_{selected}"):
@@ -549,6 +772,7 @@ def _render_vehicle_review() -> None:
                 choices[selected] = choice
                 pending["choices"] = choices
                 st.session_state["pending_vehicle_review"] = pending
+                _go_to_next_pending(selected)
                 st.rerun()
 
     with manual_tab:
@@ -561,21 +785,51 @@ def _render_vehicle_review() -> None:
         manual_choice = choices[selected_manual]
         if manual_choice["source"]:
             st.caption("Enviar uma imagem aqui substitui a imagem cadastrada para esta marca, modelo e anos.")
+
+        st.markdown("**1. Procure a foto no Google** (abre no seu navegador, já filtrado):")
+        white_col, trans_col = st.columns(2)
+        with white_col:
+            st.link_button("Google Imagens · fundo branco",
+                           google_images_url(manual_choice, transparent=False), width="stretch")
+        with trans_col:
+            st.link_button("Google Imagens · fundo transparente",
+                           google_images_url(manual_choice, transparent=True), width="stretch")
+        st.caption("No Google, clique na foto, depois clique com o botão direito nela e escolha "
+                   "**Copiar endereço da imagem**. Ou salve a foto e envie o arquivo abaixo.")
+
+        st.markdown("**2. Cole o endereço ou envie o arquivo:**")
+        pasted_url = st.text_input(
+            "Endereço da imagem (https://...)",
+            key=f"manual_vehicle_url_{pending['sku']}_{selected_manual}",
+            placeholder="https://exemplo.com/carro.png",
+        ).strip()
         uploaded = st.file_uploader(
             "Imagem do computador",
             type=["png", "jpg", "jpeg", "webp"],
             key=f"manual_vehicle_upload_{pending['sku']}_{selected_manual}",
         )
-        if uploaded:
+        if uploaded or pasted_url:
             try:
-                with Image.open(io.BytesIO(uploaded.getvalue())) as source_image:
-                    manual_image = source_image.convert("RGBA")
-                st.image(
-                    manual_image,
-                    caption=f"Prévia manual · {labels[selected_manual]}",
-                    width="stretch",
-                    alt=f"Imagem enviada para {labels[selected_manual]}",
-                )
+                if uploaded:
+                    with Image.open(io.BytesIO(uploaded.getvalue())) as source_image:
+                        manual_image = source_image.convert("RGBA")
+                else:
+                    if not pasted_url.startswith(("http://", "https://")):
+                        raise ValueError("o endereço precisa começar com http:// ou https://")
+                    with st.spinner("Baixando a imagem..."):
+                        manual_image = load_image(pasted_url)
+                with st.spinner("Recortando o veículo..."):
+                    manual_cutout = ImageOps.pad(
+                        prepare_vehicle_image(manual_image).convert("RGBA"), (900, 450),
+                        color=(255, 255, 255, 255),
+                    )
+                original_col, cutout_col = st.columns(2)
+                with original_col:
+                    st.image(_framed(manual_image), caption="Imagem escolhida", width="stretch",
+                             alt=f"Imagem escolhida para {labels[selected_manual]}")
+                with cutout_col:
+                    st.image(_framed(manual_cutout), caption="Como vai ficar na capa", width="stretch",
+                             alt=f"Veículo {labels[selected_manual]} recortado")
                 save_manual = st.checkbox(
                     "Salvar ou substituir no catálogo local",
                     value=True,
@@ -611,7 +865,11 @@ def _render_vehicle_review() -> None:
     for choice in choices:
         st.caption(f"{_fitment_label(choice)} — {choice['status']}")
     if unresolved:
-        st.info("Aprove ou descarte cada resultado. Imagens não encontradas podem ser enviadas na aba manual.")
+        pending_names = ", ".join(_fitment_label(choice) for choice in unresolved)
+        st.warning(
+            f"Para liberar **Gerar capa e imagens**, aprove ou descarte também: **{pending_names}**. "
+            "Selecione o veículo na lista acima. Imagens não encontradas podem ser enviadas na aba manual."
+        )
     if not approved:
         st.warning("Aprove pelo menos uma imagem de veículo para gerar a capa.")
     if st.button(
@@ -742,9 +1000,9 @@ def render_processor() -> None:
                 st.slider("Altura", -350, 250, 0, 10, key="cover_product_y")
                 st.slider("Zoom", 50, 150, 100, 5, key="cover_product_scale")
             with preview_column:
-                st.image(_current_previews(result)[0], caption="Prévia limpa da capa", width="stretch")
+                st.image(_framed(_current_previews(result)[0]), caption="Prévia limpa da capa", width="stretch")
         else:
-            st.image(_current_previews(result)[0], caption="Prévia limpa da capa", width="stretch")
+            st.image(_framed(_current_previews(result)[0]), caption="Prévia limpa da capa", width="stretch")
 
     for index, tab in enumerate(tabs[1:], start=2):
         with tab:
@@ -754,7 +1012,7 @@ def render_processor() -> None:
                 st.slider("Altura", -400, 400, 0, 10, key=f"image_{index}_y")
                 st.slider("Zoom", 50, 150, 100, 5, key=f"image_{index}_scale")
             with preview_column:
-                st.image(_current_previews(result)[index - 1], caption=f"Prévia limpa da imagem {index}",
+                st.image(_framed(_current_previews(result)[index - 1]), caption=f"Prévia limpa da imagem {index}",
                          width="stretch")
 
     previews = _current_previews(result)
@@ -844,7 +1102,30 @@ def render_processor() -> None:
         st.success("Lote concluído.")
 
 
+def render_cover_import() -> None:
+    st.subheader("Importar carros das capas do BaseLinker")
+    st.caption(
+        "Lê todos os produtos, pega a imagem 1 (capa) de alguns anúncios de cada modelo, recorta o carro "
+        "e salva no catálogo local. Depois disso, a busca de veículos encontra esses carros na hora. "
+        "Só lê o BaseLinker; não altera nenhum anúncio. Pode levar alguns minutos."
+    )
+    if st.button("Importar carros das capas", key="import_covers"):
+        from cover_import import import_covers
+
+        bar = st.progress(0.0, text="Iniciando...")
+        try:
+            summary = import_covers(client(), lambda fraction, message: bar.progress(min(fraction, 1.0), text=message))
+            st.success(
+                f"{summary['vehicles']} imagens de carros salvas, de {summary['models']} modelos "
+                f"({summary['recognized']} de {summary['products']} produtos reconhecidos)."
+            )
+        except (BaseLinkerError, ValueError, OSError) as error:
+            st.error(str(error))
+
+
 def render_vehicle_registration() -> None:
+    render_cover_import()
+    st.divider()
     st.header("Veículos compatíveis")
     st.caption("Cadastre uma imagem do veículo para reutilizá-la nas próximas buscas.")
     with st.form("vehicle_form"):

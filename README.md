@@ -44,7 +44,7 @@ PEC-001,bmw_serie5_f10,arquivos/veiculos/bmw_serie5_f10.png
 
 O caminho pode ser uma URL ou um arquivo local em `arquivos/veiculos/`.
 
-Antes da busca, confirme a lista de veículos: há uma linha separada para cada marca, modelo e período de anos, e ela pode ser editada para incluir compatibilidades múltiplas. Para cada linha, o app consulta primeiro o catálogo local `vehicles.csv`; se não encontrar uma imagem aplicável, procura online. A busca online só aceita resultados cujo rótulo corresponda à marca/modelo e a um ano do intervalo, e cuja imagem tenha cantos brancos. A imagem ainda precisa ser aprovada ou descartada. A aba manual permite enviar ou substituir uma imagem e, opcionalmente, salvá-la no catálogo para a próxima busca.
+Antes da busca, confirme a lista de veículos: há uma linha separada para cada marca, modelo e período de anos, e ela pode ser editada para incluir compatibilidades múltiplas. Para cada linha, o app consulta primeiro o catálogo local `vehicles.csv`; se não encontrar uma imagem aplicável, procura online no Wikimedia Commons, um ano por vez. A busca exige marca e modelo no nome da foto, descarta anos fora do intervalo e fotos de corrida, interior ou motor, e prefere fotos com fundo branco (se não houver, o fundo é removido automaticamente na capa). A imagem ainda precisa ser aprovada ou descartada. A aba manual permite enviar ou substituir uma imagem e, opcionalmente, salvá-la no catálogo para a próxima busca.
 
 ## Execucao
 
