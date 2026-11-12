@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <script src="vendor/konva.min.js"></script>
+  <style>
+    html, body { margin: 0; background: #e7e7e7; color: #222; font: 14px sans-serif; overflow: hidden; }
+    #workspace { display: grid; grid-template-columns: 42px minmax(0, 1fr); grid-template-rows: 42px minmax(0, 1fr); }
+    #top-ruler { grid-column: 2; background: #333; color: #fff; }
+    #left-ruler { grid-row: 2; background: #333; color: #fff; }
+    #stage-wrap { min-width: 0; min-height: 0; overflow: auto; padding: 8px; }
+    #stage { background: #fff; box-shadow: 0 1px 5px #999; }
+  </style>
+</head>
+<body>
+<div id="workspace">
+  <canvas id="top-ruler"></canvas>
+  <canvas id="left-ruler"></canvas>
+  <div id="stage-wrap"><div id="stage"></div></div>
+</div>
+<script src="editor.js"></script>
+</body>
+</html>

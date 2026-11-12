@@ -28,7 +28,7 @@ def _is_relevant_vehicle_page(title: str, query: str) -> bool:
 
 
 def find_vehicle_image(query: str) -> str:
-    """Find a Wikimedia Commons image URL for a vehicle description."""
+    """Find a Wikimedia Commons vehicle image URL with a white background."""
     queries = [query]
     without_years = re.sub(r"\b20\d{2}\b", "", query).strip()
     without_specs = re.sub(r"\b(?:20\d{2}|\d+(?:[.,]\d+)?)\b", "", query).strip()
@@ -48,7 +48,7 @@ def find_vehicle_image(query: str) -> str:
                 "action": "query",
                 "format": "json",
                 "generator": "search",
-                "gsrsearch": f"{candidate} vehicle",
+                "gsrsearch": f"{candidate} car white background",
                 "gsrnamespace": 6,
                 "gsrlimit": 10,
                 "prop": "imageinfo",
@@ -68,4 +68,31 @@ def find_vehicle_image(query: str) -> str:
             url = image_info.get("thumburl") or image_info.get("url", "")
             if mime.startswith("image/") and url:
                 return url
+        if candidate != query:
+            response = requests.get(
+                COMMONS_API,
+                params={
+                    "action": "query",
+                    "format": "json",
+                    "generator": "search",
+                    "gsrsearch": f"{candidate} vehicle",
+                    "gsrnamespace": 6,
+                    "gsrlimit": 10,
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime|thumburl",
+                    "iiurlwidth": 1200,
+                },
+                headers={"User-Agent": "autopecas-image-generator/1.0"},
+                timeout=30,
+            )
+            response.raise_for_status()
+            pages = response.json().get("query", {}).get("pages", {})
+            for page in pages.values():
+                if not _is_relevant_vehicle_page(page.get("title", ""), candidate):
+                    continue
+                image_info = page.get("imageinfo", [{}])[0]
+                mime = image_info.get("mime", "")
+                url = image_info.get("thumburl") or image_info.get("url", "")
+                if mime.startswith("image/") and url:
+                    return url
     raise VehicleSearchError(f"Nenhuma imagem licenciada encontrada para: {query}")

@@ -1,8 +1,12 @@
 import json
+import time
+from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
 
 import requests
 
+PROJECT_DIR = Path(__file__).resolve().parent
 
 class BaseLinkerError(RuntimeError):
     pass
@@ -20,8 +24,22 @@ class BaseLinkerClient:
             "method": method,
             "parameters": json.dumps(parameters),
         }
-        response = requests.post(self.api_url, data=payload, timeout=60)
-        response.raise_for_status()
+        response = None
+        for attempt in range(3):
+            try:
+                response = requests.post(self.api_url, data=payload, timeout=(5, 30))
+                if response.status_code != 429:
+                    response.raise_for_status()
+                    break
+            except requests.RequestException:
+                if attempt == 2:
+                    raise BaseLinkerError("Falha de comunicação com o BaseLinker. Tente novamente.")
+            if attempt < 2:
+                time.sleep(2**attempt)
+        if response is None:
+            raise BaseLinkerError("Falha de comunicação com o BaseLinker. Tente novamente.")
+        if response.status_code == 429:
+            raise BaseLinkerError("O BaseLinker limitou as requisições. Aguarde e tente novamente.")
         result = response.json()
         if result.get("status") != "SUCCESS":
             raise BaseLinkerError(result.get("error_message", "Erro desconhecido na API do BaseLinker"))
@@ -64,8 +82,16 @@ class BaseLinkerClient:
         )
         return product_id, details.get("products", {}).get(product_id, product)
 
-    def update_images(self, product_id: str, image_urls: list[str]) -> None:
-        images = {str(index): url for index, url in enumerate(image_urls)}
+    def update_images(
+        self,
+        product_id: str,
+        image_urls: list[str],
+        existing_images: list[str] | None = None,
+    ) -> None:
+        images = {
+            str(index): f"url:{url}" if not url.startswith(("url:", "data:")) else url
+            for index, url in enumerate((image_urls + (existing_images or []))[:16])
+        }
         self.call(
             "updateInventoryProductsData",
             {
@@ -74,13 +100,57 @@ class BaseLinkerClient:
             },
         )
 
+    def save_images_backup(
+        self,
+        sku: str,
+        product_id: str,
+        images: list[str],
+        backup_dir: str | Path = PROJECT_DIR / "arquivos" / "backup",
+    ) -> Path:
+        directory = Path(backup_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        path = directory / f"{sku}_{timestamp}.json"
+        path.write_text(
+            json.dumps({"sku": sku, "product_id": product_id, "images": images}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return path
+
+    def restore_images(self, backup_path: str | Path) -> None:
+        backup = json.loads(Path(backup_path).read_text(encoding="utf-8"))
+        images = backup.get("images", [])
+        if not isinstance(images, list):
+            raise BaseLinkerError("Backup de imagens inválido")
+        self.call(
+            "updateInventoryProductsData",
+            {
+                "inventory_id": self.inventory_id,
+                "products": {
+                    str(backup["product_id"]): {
+                        "images": {
+                            str(index): value if value.startswith(("url:", "data:")) else f"url:{value}"
+                            for index, value in enumerate(images[:16])
+                        }
+                    }
+                },
+            },
+        )
+
 
 def extract_image_urls(value: Any) -> list[str]:
     urls: list[str] = []
-    if isinstance(value, str) and value.startswith(("http://", "https://")):
-        return [value]
+    if isinstance(value, str):
+        normalized = value[4:] if value.startswith("url:") else value
+        if normalized.startswith(("http://", "https://")):
+            return [normalized]
     if isinstance(value, dict):
-        for item in value.values():
+        items = value.items()
+        try:
+            items = sorted(items, key=lambda item: int(item[0]))
+        except (TypeError, ValueError):
+            items = list(items)
+        for _, item in items:
             urls.extend(extract_image_urls(item))
     elif isinstance(value, list):
         for item in value:

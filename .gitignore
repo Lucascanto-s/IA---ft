@@ -3,5 +3,11 @@ __pycache__/
 *.py[cod]
 arquivos/downloads/*
 arquivos/saida/*
+arquivos/backup/*
 !arquivos/downloads/.gitkeep
 !arquivos/saida/.gitkeep
+!arquivos/backup/.gitkeep
+
+*.zip
+.env
+.venv/
