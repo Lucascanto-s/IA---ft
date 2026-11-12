@@ -383,9 +383,36 @@ def product_image(source: str) -> Image.Image:
 
 def prepare_vehicle(vehicle_source: str) -> Image.Image:
     vehicle = load_image(vehicle_source)
+    return prepare_vehicle_image(vehicle)
+
+
+def prepare_vehicle_image(vehicle: Image.Image) -> Image.Image:
+    vehicle = vehicle.convert("RGBA")
     if vehicle.getchannel("A").getextrema()[0] == 255 and not has_white_background(vehicle):
         vehicle = remove_background(vehicle)
     return trim_white_borders(vehicle)
+
+
+def compose_vehicle_group(vehicles: Iterable[Image.Image]) -> Image.Image:
+    """Place approved vehicle images in a single horizontal group on white."""
+    images = [prepare_vehicle_image(image) for image in vehicles]
+    if not images:
+        raise ValueError("A capa precisa de pelo menos um veículo aprovado")
+    if len(images) == 1:
+        return images[0]
+
+    canvas_width, _ = CANVAS_SIZE
+    top_height = 420
+    margin = 24
+    gap = 12
+    slot_width = (canvas_width - 2 * margin - gap * (len(images) - 1)) // len(images)
+    canvas = Image.new("RGBA", (canvas_width, top_height), WHITE + (255,))
+    for index, image in enumerate(images):
+        fitted = ImageOps.contain(image, (max(1, slot_width - 8), top_height - 24))
+        x = margin + index * (slot_width + gap) + (slot_width - fitted.width) // 2
+        y = (top_height - fitted.height) // 2
+        canvas.alpha_composite(fitted.convert("RGBA"), (x, y))
+    return canvas
 
 
 def compose_cover(
@@ -418,11 +445,18 @@ def compose_cover(
     )
 
 
-def create_cover(vehicle_source: str, product: Image.Image) -> Image.Image:
-    return compose_cover(prepare_vehicle(vehicle_source), product)
+def create_cover(vehicle_source: str | Image.Image, product: Image.Image) -> Image.Image:
+    vehicle = (
+        prepare_vehicle(vehicle_source)
+        if isinstance(vehicle_source, str)
+        else prepare_vehicle_image(vehicle_source)
+    )
+    return compose_cover(vehicle, product)
 
 
-def create_set(product_sources: Iterable[str], vehicle_source: str, output_dir: str) -> SetResult:
+def create_set(
+    product_sources: Iterable[str], vehicle_source: str | Image.Image, output_dir: str
+) -> SetResult:
     sources = list(product_sources)[:4]
     if not sources:
         raise ValueError("O produto nao possui imagens")

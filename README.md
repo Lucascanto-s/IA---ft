@@ -5,16 +5,17 @@ com revisao visual, fila de trabalho e publicacao protegida.
 
 ## Fluxo
 
-1. Informe um ou mais SKUs na fila lateral.
-2. O sistema consulta o produto e baixa as imagens diretamente do BaseLinker.
-3. O `rembg` remove o fundo das fotos da peca.
-4. O Pillow gera quatro JPGs em fundo branco:
-	- `1.jpg`: veiculo compativel na parte superior e peca na parte inferior;
+1. Informe de 5 a 10 SKUs na fila lateral (um SKU também pode ser processado sozinho).
+2. Confirme ou ajuste a lista de veículos compatíveis, uma linha por marca, modelo e anos.
+3. Para cada veículo, o sistema procura primeiro no catálogo local e depois na internet; a busca online confere o modelo, o ano e o fundo branco.
+4. Aprove ou descarte cada imagem. A aba manual permite adicionar ou substituir uma imagem;
+   você pode salvá-la no catálogo para reutilização.
+5. O Pillow gera quatro JPGs em fundo branco:
+	- `1.jpg`: os veículos aprovados na parte superior e a peça na parte inferior;
 	- `2.jpg` a `4.jpg`: diferentes angulos da peca centralizada.
-5. Revise as quatro imagens nas abas da tela.
-6. Edite as imagens usando a previa limpa e os controles de lado, altura e zoom. Na capa,
-   carro e peca possuem controles independentes.
-7. Marque a confirmacao, publique e, se necessario, use **Desfazer ultima publicacao**.
+6. Revise as quatro imagens nas abas da tela.
+7. Edite as imagens usando a prévia e os controles de posição e zoom.
+8. Confirme a publicação e, no lote, avance para o próximo SKU ou pule o atual. Se necessário, use **Desfazer última publicação**.
 
 Antes de publicar, o sistema salva um backup das imagens originais. As posicoes 5 a 16
 tambem sao preservadas; somente as quatro primeiras sao substituidas.
@@ -34,18 +35,16 @@ Preencha `BASELINKER_TOKEN` e `BASELINKER_INVENTORY_ID` no `.env`.
 
 ## Veiculos compativeis
 
-Edite `arquivos/mapa/vehicle_map.csv` e informe uma imagem com permissao comercial:
+Para associar uma imagem diretamente a um SKU, edite `arquivos/mapa/vehicle_map.csv`:
 
 ```csv
-sku,vehicle_key,vehicle_image_url,vehicle_source,vehicle_license
-PEC-001,bmw_serie5_f10,arquivos/veiculos/bmw_serie5_f10.png,Wikimedia Commons,CC BY-SA
+sku,vehicle_key,vehicle_image_url
+PEC-001,bmw_serie5_f10,arquivos/veiculos/bmw_serie5_f10.png
 ```
 
-O arquivo pode apontar para uma imagem hospedada na internet ou para um caminho local. Para manter o padrao, imagens locais de veiculos ficam em `arquivos/veiculos/`. A imagem do veiculo nao e pesquisada e baixada de forma indiscriminada: a fonte e a licenca precisam ser registradas para uso comercial.
+O caminho pode ser uma URL ou um arquivo local em `arquivos/veiculos/`.
 
-A resolucao segue esta ordem: imagem cadastrada para o SKU em `vehicle_map.csv`,
-imagem compativel cadastrada em `vehicles.csv` e, somente se nao houver nenhuma
-das duas, busca no Wikimedia Commons com a especificacao de carro em fundo branco.
+Antes da busca, confirme a lista de veículos: há uma linha separada para cada marca, modelo e período de anos, e ela pode ser editada para incluir compatibilidades múltiplas. Para cada linha, o app consulta primeiro o catálogo local `vehicles.csv`; se não encontrar uma imagem aplicável, procura online. A busca online só aceita resultados cujo rótulo corresponda à marca/modelo e a um ano do intervalo, e cuja imagem tenha cantos brancos. A imagem ainda precisa ser aprovada ou descartada. A aba manual permite enviar ou substituir uma imagem e, opcionalmente, salvá-la no catálogo para a próxima busca.
 
 ## Execucao
 
@@ -72,7 +71,7 @@ arquivos/
 
 ## Hospedagem das imagens
 
-O BaseLinker precisa receber URLs acessiveis. O MVP aceita URLs publicas definidas em `PUBLIC_IMAGE_BASE_URL` e salva os arquivos no diretorio correspondente. Para producao, esse diretorio deve ser publicado por um servidor ou storage com HTTPS.
+O envio funciona localmente sem hospedagem: quando `PUBLIC_IMAGE_BASE_URL` estiver vazio, as imagens seguem em base64 na chamada da API (limite de 2 MB por arquivo). Se definir `PUBLIC_IMAGE_BASE_URL`, o sistema envia links e o diretorio de saida precisa estar publicado por um servidor ou storage com HTTPS.
 
 `PUBLIC_IMAGE_BASE_URL` nao e o caminho local da pasta. E a URL base pela qual o
 servidor publica `OUTPUT_DIR`. Por exemplo, se `OUTPUT_DIR=arquivos/saida` for

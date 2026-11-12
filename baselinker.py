@@ -1,3 +1,5 @@
+import base64
+import io
 import json
 import time
 from pathlib import Path
@@ -5,8 +7,10 @@ from typing import Any
 from datetime import datetime, timezone
 
 import requests
+from PIL import Image
 
 PROJECT_DIR = Path(__file__).resolve().parent
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 class BaseLinkerError(RuntimeError):
     pass
@@ -20,14 +24,18 @@ class BaseLinkerClient:
 
     def call(self, method: str, parameters: dict[str, Any]) -> dict[str, Any]:
         payload = {
-            "token": self.token,
             "method": method,
             "parameters": json.dumps(parameters),
         }
         response = None
         for attempt in range(3):
             try:
-                response = requests.post(self.api_url, data=payload, timeout=(5, 30))
+                response = requests.post(
+                    self.api_url,
+                    data=payload,
+                    headers={"X-BLToken": self.token},
+                    timeout=(5, 30),
+                )
                 if response.status_code != 429:
                     response.raise_for_status()
                     break
@@ -88,17 +96,38 @@ class BaseLinkerClient:
         image_urls: list[str],
         existing_images: list[str] | None = None,
     ) -> None:
+        """Replace the first positions and keep `existing_images` after them (max 16)."""
         images = {
             str(index): f"url:{url}" if not url.startswith(("url:", "data:")) else url
             for index, url in enumerate((image_urls + (existing_images or []))[:16])
         }
         self.call(
-            "updateInventoryProductsData",
+            "addInventoryProduct",
             {
                 "inventory_id": self.inventory_id,
-                "products": {product_id: {"images": images}},
+                "product_id": product_id,
+                "images": images,
             },
         )
+
+    @staticmethod
+    def image_file_to_data(path: str | Path) -> str:
+        """Encode an image for the API, compressing it below BaseLinker's 2 MB limit."""
+        raw = Path(path).read_bytes()
+        if len(raw) > MAX_IMAGE_BYTES:
+            with Image.open(path) as source:
+                image = source.convert("RGB")
+            quality = 90
+            while quality >= 50:
+                buffer = io.BytesIO()
+                image.save(buffer, "JPEG", quality=quality, optimize=True)
+                raw = buffer.getvalue()
+                if len(raw) <= MAX_IMAGE_BYTES:
+                    break
+                quality -= 5
+        if len(raw) > MAX_IMAGE_BYTES:
+            raise ValueError(f"Imagem acima de 2 MB mesmo comprimida: {path}")
+        return "data:" + base64.b64encode(raw).decode("ascii")
 
     def save_images_backup(
         self,
@@ -122,20 +151,7 @@ class BaseLinkerClient:
         images = backup.get("images", [])
         if not isinstance(images, list):
             raise BaseLinkerError("Backup de imagens inválido")
-        self.call(
-            "updateInventoryProductsData",
-            {
-                "inventory_id": self.inventory_id,
-                "products": {
-                    str(backup["product_id"]): {
-                        "images": {
-                            str(index): value if value.startswith(("url:", "data:")) else f"url:{value}"
-                            for index, value in enumerate(images[:16])
-                        }
-                    }
-                },
-            },
-        )
+        self.update_images(str(backup["product_id"]), images[:16])
 
 
 def extract_image_urls(value: Any) -> list[str]:
