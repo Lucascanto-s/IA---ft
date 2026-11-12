@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -15,8 +16,12 @@ from cover_import import find_related_covers, parse_name
 from image_processor import (
     compose_cover,
     compose_vehicle_group,
+    content_bbox,
+    cover_base_sizes,
     create_set,
+    enhance_product,
     extract_vehicle_from_cover,
+    fit_on_white,
     load_image,
     prepare_vehicle_image,
     product_image,
@@ -26,6 +31,7 @@ from image_processor import (
     validate_output,
 )
 from project_utils import normalized_tokens, sanitize_sku
+from ui.drag_canvas import drag_canvas, image_data_url
 from ui.theme import apply_theme, flow_steps
 from vehicle_search import VehicleSearchError, find_vehicle_images
 
@@ -298,9 +304,39 @@ def save_vehicle_image(brand: str, model: str, years: str, image: Image.Image) -
     return image_path
 
 
+DEFAULT_CONTRAST_PCT = 108
+DEFAULT_SHARPNESS_PCT = 100
+
+
+def _reset_part_treatment() -> None:
+    st.session_state["part_contrast"] = DEFAULT_CONTRAST_PCT
+    st.session_state["part_sharpness"] = DEFAULT_SHARPNESS_PCT
+
+
+def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int) -> None:
+    """Re-treat the part (cover layer and images 2-4) when contrast/sharpness change."""
+    raw = result.get("product_raw")
+    settings = (contrast_pct, sharpness_pct)
+    if not raw or result.get("treatment") == settings:
+        return
+    params = {"contrast": contrast_pct / 100, "sharpness": sharpness_pct / 100}
+    # Same photo in several positions is treated once; distinct photos in parallel.
+    unique = {id(image): image for image in raw.values()}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        treated = dict(zip(unique, pool.map(lambda image: enhance_product(image, **params),
+                                            unique.values())))
+    if result.get("cover_layers"):
+        result["cover_layers"]["product"] = treated[id(raw[1])]
+    for index in range(2, 5):
+        result["editor_sources"][index] = fit_on_white(treated[id(raw[index])], (10, 10, 1190, 1190))
+    result["treatment"] = settings
+    result.pop("drag_assets", None)
+
+
 def _reset_editor_state() -> None:
     for key in ("cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
-                "cover_product_x", "cover_product_y", "cover_product_scale"):
+                "cover_product_x", "cover_product_y", "cover_product_scale",
+                "part_contrast", "part_sharpness"):
         st.session_state.pop(key, None)
     for index in range(2, 5):
         for suffix in ("x", "y", "scale"):
@@ -456,10 +492,14 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
     sources = [load_image(url) for url in image_urls[:4]]
     while len(sources) < 4:
         sources.append(sources[-1].copy())
-    cover_layers = {
-        "vehicle": vehicle_group,
-        "product": product_image(image_urls[1] if len(image_urls) > 1 else image_urls[0]),
+    # Part cut out but not yet treated, so contrast/sharpness can be changed in the editor.
+    padded_urls = (list(image_urls[:4]) + [image_urls[:4][-1]] * 4)[:4]
+    product_raw = {
+        1: product_image(image_urls[1] if len(image_urls) > 1 else image_urls[0], enhance=False),
+        **{index: product_image(padded_urls[index - 1], enhance=False) for index in range(2, 5)},
     }
+    # The treated part is filled in by _apply_part_treatment below.
+    cover_layers = {"vehicle": vehicle_group, "product": product_raw[1]}
     previews = [load_image(str(output_dir / f"{index}.jpg")) if (output_dir / f"{index}.jpg").exists()
                else Image.new("RGB", (1200, 1200), "white") for index in range(1, 5)]
     st.session_state["result"] = {
@@ -484,9 +524,42 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         },
         "previews": previews,
         "backup_path": None,
+        "product_raw": product_raw,
     }
+    _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT)
     _reset_editor_state()
     st.session_state.pop("pending_vehicle_review", None)
+
+
+def _drag_assets(result: dict) -> dict:
+    """Browser copies of each layer, encoded once per generated SKU."""
+    assets = result.get("drag_assets")
+    if assets:
+        return assets
+    assets = {}
+    to_encode: dict[str, Image.Image] = {}
+    layers = result.get("cover_layers")
+    if layers:
+        previous = result.get("drag_vehicle_asset")
+        if previous and previous[0] is layers["vehicle"]:
+            assets["vehicle"] = previous[1]  # the cars do not change with the part treatment
+        else:
+            to_encode["vehicle"] = ImageOps.contain(layers["vehicle"], (1060, 390))
+        to_encode["product"] = layers["product"]
+        assets["vehicle_size"] = layers["vehicle"].size
+        assets["product_size"] = layers["product"].size
+    for index in range(2, 5):
+        source = result["editor_sources"][index]
+        bbox = content_bbox(source)
+        content = source.crop(bbox) if bbox else source
+        to_encode[f"image_{index}"] = content
+        assets[f"image_{index}_size"] = content.size
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assets.update(zip(to_encode, pool.map(image_data_url, to_encode.values())))
+    if layers:
+        result["drag_vehicle_asset"] = (layers["vehicle"], assets["vehicle"])
+    result["drag_assets"] = assets
+    return assets
 
 
 def _current_previews(result: dict) -> list[Image.Image]:
@@ -986,34 +1059,80 @@ def render_processor() -> None:
         ))
     for warning in result.get("warnings", []):
         st.warning(warning)
+    for prefix in ["cover_vehicle", "cover_product"] + [f"image_{index}" for index in range(2, 5)]:
+        st.session_state.setdefault(f"{prefix}_x", 0)
+        st.session_state.setdefault(f"{prefix}_y", 0)
+        st.session_state.setdefault(f"{prefix}_scale", 100)
+    st.session_state.setdefault("part_contrast", DEFAULT_CONTRAST_PCT)
+    st.session_state.setdefault("part_sharpness", DEFAULT_SHARPNESS_PCT)
+
+    if result.get("product_raw"):
+        with st.container(border=True):
+            st.markdown("**Tratamento da peça** · vale para a capa e as imagens 2, 3 e 4")
+            contrast_col, sharpness_col, reset_col = st.columns([2, 2, 1], vertical_alignment="bottom")
+            with contrast_col:
+                st.slider("Contraste", 80, 140, step=1, key="part_contrast", format="%d%%",
+                          help="100% = foto original. Padrão: 108%.")
+            with sharpness_col:
+                st.slider("Nitidez", 0, 200, step=5, key="part_sharpness", format="%d%%",
+                          help="0% = sem nitidez extra. Padrão: 100%.")
+            with reset_col:
+                st.button("Restaurar padrão", on_click=_reset_part_treatment, width="stretch",
+                          icon=":material/restart_alt:")
+        with st.spinner("Aplicando tratamento na peça..."):
+            _apply_part_treatment(result, st.session_state["part_contrast"],
+                                  st.session_state["part_sharpness"])
+    assets = _drag_assets(result)
+
     tabs = st.tabs(["Imagem 1 · Capa", "Imagem 2", "Imagem 3", "Imagem 4"])
     with tabs[0]:
         if result.get("cover_layers"):
             preview_column, controls_column = st.columns([1.5, 1])
             with controls_column:
+                st.caption("Ajuste fino (também dá para arrastar na imagem)")
                 st.subheader("Veículos compatíveis")
-                st.slider("Lado", -400, 400, 0, 10, key="cover_vehicle_x")
-                st.slider("Altura", -250, 250, 0, 10, key="cover_vehicle_y")
-                st.slider("Zoom", 50, 150, 100, 5, key="cover_vehicle_scale")
+                st.slider("Lado", -400, 400, step=1, key="cover_vehicle_x")
+                st.slider("Altura", -250, 250, step=1, key="cover_vehicle_y")
+                st.slider("Zoom", 50, 150, step=5, key="cover_vehicle_scale")
                 st.subheader("Peça")
-                st.slider("Lado", -400, 400, 0, 10, key="cover_product_x")
-                st.slider("Altura", -350, 250, 0, 10, key="cover_product_y")
-                st.slider("Zoom", 50, 150, 100, 5, key="cover_product_scale")
+                st.slider("Lado", -400, 400, step=1, key="cover_product_x")
+                st.slider("Altura", -350, 250, step=1, key="cover_product_y")
+                st.slider("Zoom", 50, 150, step=5, key="cover_product_scale")
             with preview_column:
-                st.image(_framed(_current_previews(result)[0]), caption="Prévia limpa da capa", width="stretch")
+                vehicle_base, product_base = cover_base_sizes(
+                    assets["vehicle_size"], assets["product_size"],
+                    st.session_state["cover_vehicle_scale"],
+                )
+                drag_canvas([
+                    {"id": "vehicle", "label": "Veículos", "src": assets["vehicle"],
+                     "base_w": vehicle_base[0], "base_h": vehicle_base[1], "top": 25, "z": 1,
+                     "shadow": True, "x_range": [-400, 400], "y_range": [-250, 250],
+                     "scale_range": [50, 150]},
+                    {"id": "product", "label": "Peça", "src": assets["product"],
+                     "base_w": product_base[0], "base_h": product_base[1], "top": 500, "z": 2,
+                     "shadow": False, "x_range": [-400, 400], "y_range": [-350, 250],
+                     "scale_range": [50, 150]},
+                ], {"vehicle": "cover_vehicle", "product": "cover_product"}, key="drag_cover")
         else:
-            st.image(_framed(_current_previews(result)[0]), caption="Prévia limpa da capa", width="stretch")
+            st.image(_framed(_current_previews(result)[0]), caption="Prévia limpa da capa", width="stretch",
+                     alt="Prévia da capa")
 
     for index, tab in enumerate(tabs[1:], start=2):
         with tab:
             preview_column, controls_column = st.columns([1.5, 1])
             with controls_column:
-                st.slider("Lado", -400, 400, 0, 10, key=f"image_{index}_x")
-                st.slider("Altura", -400, 400, 0, 10, key=f"image_{index}_y")
-                st.slider("Zoom", 50, 150, 100, 5, key=f"image_{index}_scale")
+                st.caption("Ajuste fino (também dá para arrastar na imagem)")
+                st.slider("Lado", -400, 400, step=1, key=f"image_{index}_x")
+                st.slider("Altura", -400, 400, step=1, key=f"image_{index}_y")
+                st.slider("Zoom", 50, 150, step=5, key=f"image_{index}_scale")
             with preview_column:
-                st.image(_framed(_current_previews(result)[index - 1]), caption=f"Prévia limpa da imagem {index}",
-                         width="stretch")
+                content_size = assets[f"image_{index}_size"]
+                drag_canvas([
+                    {"id": "product", "label": f"Peça · imagem {index}", "src": assets[f"image_{index}"],
+                     "base_w": content_size[0], "base_h": content_size[1], "top": None, "z": 1,
+                     "shadow": False, "x_range": [-400, 400], "y_range": [-400, 400],
+                     "scale_range": [50, 150]},
+                ], {"product": f"image_{index}"}, key=f"drag_image_{index}")
 
     previews = _current_previews(result)
     validation = [validate_output(image) for image in previews]

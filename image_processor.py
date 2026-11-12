@@ -2,13 +2,14 @@ import io
 import hashlib
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import quote
 
 import requests
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -382,6 +383,29 @@ def render_layers(
     return canvas.convert("RGB")
 
 
+def contain_size(size: tuple[int, int], box: tuple[int, int]) -> tuple[int, int]:
+    """Same size ImageOps.contain would produce, without resizing anything."""
+    width, height = size
+    if not width or not height:
+        return 0, 0
+    if width / height > box[0] / box[1]:
+        return box[0], round(height / width * box[0])
+    if width / height < box[0] / box[1]:
+        return round(width / height * box[1]), box[1]
+    return box
+
+
+def cover_base_sizes(
+    vehicle_size: tuple[int, int], product_size: tuple[int, int], vehicle_scale: int = 100
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Vehicle size at zoom 100 and product size at zoom 100 (it depends on the vehicle zoom),
+    matching cover_editor_layers."""
+    vehicle_base = contain_size(vehicle_size, (1060, 390))
+    vehicle_width = round(vehicle_base[0] * vehicle_scale / 100)
+    product_width = min(1100, max(900, int(vehicle_width * 1.03)))
+    return vehicle_base, contain_size(product_size, (product_width, 680))
+
+
 def cover_editor_layers(
     vehicle: Image.Image,
     product: Image.Image,
@@ -462,13 +486,61 @@ def validate_output(path: Path | Image.Image, tolerance: int = 24) -> dict[str, 
     }
 
 
-def product_image(source: str) -> Image.Image:
+PRODUCT_MIN_SIDE = 1400
+DEFAULT_CONTRAST = 1.08
+DEFAULT_SHARPNESS = 1.0
+
+
+def enhance_product(
+    image: Image.Image, contrast: float = DEFAULT_CONTRAST, sharpness: float = DEFAULT_SHARPNESS
+) -> Image.Image:
+    """Make the part photo crisper without touching the white background.
+
+    Upscales small photos before they are fitted on the 1200px canvas (so the final resize
+    shrinks instead of blurring), adds a little contrast/colour and sharpens edges and texture.
+    contrast: 1.0 = unchanged. sharpness: 0 = no extra sharpening, 1 = default, 2 = double.
+    """
+    image = image.convert("RGBA")
+    longest = max(image.size)
+    if longest < PRODUCT_MIN_SIDE:
+        factor = PRODUCT_MIN_SIDE / longest
+        image = image.resize((round(image.width * factor), round(image.height * factor)),
+                             Image.Resampling.LANCZOS)
+    alpha = image.getchannel("A")
+    rgb = image.convert("RGB")
+    background = np.array(rgb).min(axis=2) >= 250
+
+    if sharpness > 0:
+        # Smooth JPEG blocks/noise first so sharpening does not turn them into speckles.
+        rgb = rgb.filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.5))
+    if contrast != 1:
+        rgb = ImageEnhance.Contrast(rgb).enhance(contrast)
+    rgb = ImageEnhance.Color(rgb).enhance(1.05)
+    if sharpness > 0:
+        rgb = rgb.filter(ImageFilter.UnsharpMask(radius=2.5, percent=round(110 * sharpness), threshold=4))
+        rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1.0, percent=round(50 * sharpness), threshold=6))
+
+    pixels = np.array(rgb)
+    pixels[background] = WHITE  # sem halo cinza no fundo branco
+    result = Image.fromarray(pixels).convert("RGBA")
+    result.putalpha(alpha)
+    return result
+
+
+@lru_cache(maxsize=16)
+def _clean_product(source: str) -> Image.Image:
+    """Part cut out on white/transparent, cached so the editor does not rerun background removal."""
     image = load_image(source)
     if image.getchannel("A").getextrema()[0] < 255:
         return trim_white_borders(image)
     if has_white_background(image):
         return trim_white_borders(whiten_background(image))
     return trim_white_borders(remove_background(image))
+
+
+def product_image(source: str, enhance: bool = True) -> Image.Image:
+    product = _clean_product(source).copy()
+    return enhance_product(product) if enhance else product
 
 
 def prepare_vehicle(vehicle_source: str) -> Image.Image:
