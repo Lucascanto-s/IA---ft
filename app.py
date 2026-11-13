@@ -16,6 +16,7 @@ from cover_import import find_related_covers, parse_name
 from image_processor import (
     compose_cover,
     compose_vehicle_group,
+    cover_product_index,
     content_bbox,
     cover_base_sizes,
     create_set,
@@ -530,8 +531,9 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         sources.append(sources[-1].copy())
     # Part cut out but not yet treated, so contrast/sharpness can be changed in the editor.
     padded_urls = (list(image_urls[:4]) + [image_urls[:4][-1]] * 4)[:4]
+    cover_index = cover_product_index(sources[0], len(image_urls))
     product_raw = {
-        1: product_image(image_urls[1] if len(image_urls) > 1 else image_urls[0], enhance=False),
+        1: product_image(image_urls[cover_index], enhance=False),
         **{index: product_image(padded_urls[index - 1], enhance=False) for index in range(2, 5)},
     }
     # The treated part is filled in by _apply_part_treatment below.

@@ -589,6 +589,16 @@ def prepare_vehicle_image(vehicle: Image.Image) -> Image.Image:
     return trim_white_borders(vehicle)
 
 
+def is_composite_cover(image: Image.Image) -> bool:
+    """Photo 1 already is an old cover (cars on top + part below)."""
+    return len(content_bands(image)) >= 2
+
+
+def cover_product_index(first_source: Image.Image, total: int) -> int:
+    """Which product photo goes on the cover: photo 1, unless it is an old composite cover."""
+    return 1 if is_composite_cover(first_source) and total > 1 else 0
+
+
 def compose_vehicle_group(vehicles: Iterable[Image.Image]) -> Image.Image:
     """Place approved vehicle images in a single horizontal group on white."""
     images = [prepare_vehicle_image(image) for image in vehicles]
@@ -599,17 +609,18 @@ def compose_vehicle_group(vehicles: Iterable[Image.Image]) -> Image.Image:
 
     canvas_width, _ = CANVAS_SIZE
     top_height = 420
-    margin = 24
-    gap = 12
-    slot_width = (canvas_width - 2 * margin - gap * (len(images) - 1)) // len(images)
+    gap = 6
+    slot_width = (canvas_width - gap * (len(images) - 1)) // len(images)
     # Transparent canvas: an opaque white one would cast a rectangular shadow on the cover.
     canvas = Image.new("RGBA", (canvas_width, top_height), WHITE + (0,))
     for index, image in enumerate(images):
-        fitted = ImageOps.contain(image, (max(1, slot_width - 8), top_height - 24))
-        x = margin + index * (slot_width + gap) + (slot_width - fitted.width) // 2
+        fitted = ImageOps.contain(image, (max(1, slot_width), top_height - 24))
+        x = index * (slot_width + gap) + (slot_width - fitted.width) // 2
         y = (top_height - fitted.height) // 2
         canvas.alpha_composite(fitted.convert("RGBA"), (x, y))
-    return canvas
+    # Crop the empty sides so the cars fill the whole vehicle area of the cover (bigger cars).
+    bbox = canvas.getchannel("A").getbbox()
+    return canvas.crop(bbox) if bbox else canvas
 
 
 def compose_cover(
@@ -669,11 +680,10 @@ def create_set(
     output.mkdir(parents=True, exist_ok=True)
     paths = [output / "1.jpg", output / "2.jpg", output / "3.jpg", output / "4.jpg"]
     first_source = load_image(sources[0])
-    if len(content_bands(first_source)) >= 2:
+    if is_composite_cover(first_source):
         cover = create_composite_cover(first_source)
     else:
-        cover_product = product_images[1] if len(sources) > 1 else product_images[0]
-        cover = create_cover(vehicle_source, cover_product)
+        cover = create_cover(vehicle_source, product_images[cover_product_index(first_source, len(sources))])
     sharpen(cover).save(paths[0], quality=98, subsampling=0)
     for path, image in zip(paths[1:], product_images[1:4]):
         sharpen(fit_on_white(image, (10, 10, 1190, 1190))).save(path, quality=98, subsampling=0)
