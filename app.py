@@ -1414,20 +1414,40 @@ def _next_star_batch() -> list[str]:
     return [item["sku"] for item in (fresh or retry)[:_batch_size()]]
 
 
+def _sku_range_inputs() -> None:
+    """Faixa de SKU opcional: lê só os SKUs dentro dela (mais rápido)."""
+    active = st.session_state.get("star_sku_from") is not None or st.session_state.get("star_sku_to") is not None
+    with st.expander("Limitar faixa de SKU (opcional)", icon=":material/filter_alt:", expanded=active):
+        st.caption("Lê só os SKUs com número dentro da faixa — mais rápido. Deixe vazio para ler o inventário "
+                   "inteiro. Ex.: de 9000 até o fim do estoque.")
+        de_col, ate_col = st.columns(2)
+        de_col.number_input("De (SKU)", min_value=0, step=1, value=None, format="%d",
+                            key="star_sku_from", placeholder="ex.: 9000")
+        ate_col.number_input("Até (SKU)", min_value=0, step=1, value=None, format="%d",
+                             key="star_sku_to", placeholder="deixe vazio = até o fim")
+        de, ate = st.session_state.get("star_sku_from"), st.session_state.get("star_sku_to")
+        if de is not None and ate is not None and de > ate:
+            st.warning("O 'De' está maior que o 'Até'.", icon=":material/warning:")
+
+
 def _load_star_queue() -> None:
     if STAR_TODO is None:
-        st.error("Configure BASELINKER_STAR_TODO no arquivo .env.", icon=":material/error:")
+        st.error("Configure a estrela da fila em Configurações.", icon=":material/error:")
         return
+    sku_from = st.session_state.get("star_sku_from")
+    sku_to = st.session_state.get("star_sku_to")
     bar = st.progress(0.0, text="Lendo o inventário do BaseLinker...")
     try:
         items = client().find_starred(
-            STAR_TODO, lambda fraction, message: bar.progress(min(fraction, 1.0), text=message)
+            STAR_TODO, lambda fraction, message: bar.progress(min(fraction, 1.0), text=message),
+            sku_from=int(sku_from) if sku_from is not None else None,
+            sku_to=int(sku_to) if sku_to is not None else None,
         )
     except (BaseLinkerError, ValueError) as error:
         bar.empty()
         st.error(str(error), icon=":material/error:")
         return
-    st.session_state["star_queue"] = {"items": items}
+    st.session_state["star_queue"] = {"items": items, "sku_from": sku_from, "sku_to": sku_to}
     st.rerun()
 
 
@@ -1436,8 +1456,9 @@ def _render_star_picker() -> list[str]:
     queue = st.session_state.get("star_queue")
     if not queue:
         st.caption("Busca no BaseLinker os produtos com a :yellow[**estrela amarela**] (fazer imagem). Lê o "
-                   "inventário inteiro uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver "
+                   "inventário uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver "
                    "aberto. Ao publicar, a estrela vira :red[**vermelha**].")
+        _sku_range_inputs()
         if st.button(":yellow[:material/star:] Buscar SKUs com estrela amarela", key="load_star_queue",
                      width="stretch"):
             _load_star_queue()
@@ -1450,10 +1471,14 @@ def _render_star_picker() -> list[str]:
         st.badge(f"{len(fresh)} na fila", icon=":material/pending:", color="blue")
         if retry:
             st.badge(f"{len(retry)} abertos sem publicar", icon=":material/edit_note:", color="orange")
+        if queue.get("sku_from") is not None or queue.get("sku_to") is not None:
+            faixa = f"{queue.get('sku_from') or 'início'} a {queue.get('sku_to') or 'fim'}"
+            st.badge(f"Faixa {faixa}", icon=":material/filter_alt:", color="violet")
         st.space("stretch")
         if st.button("Atualizar", icon=":material/refresh:", key="reload_star_queue", type="tertiary",
                      help="Lê o BaseLinker de novo (inclui estrelas marcadas depois da última busca)."):
             _load_star_queue()
+    _sku_range_inputs()
     rows = fresh + retry
     if not rows:
         st.success("Todos os SKUs com estrela já foram publicados.", icon=":material/task_alt:")
