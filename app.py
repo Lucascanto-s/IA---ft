@@ -379,6 +379,23 @@ def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int,
     result.pop("drag_assets", None)
 
 
+def _set_cover_photo(result: dict, photo_number: int) -> None:
+    """Use another product photo as the part on the cover (image 1)."""
+    urls = list((result.get("product_images") or [])[:4])
+    if not urls:
+        return
+    padded = (urls + [urls[-1]] * 4)[:4]
+    index = max(1, min(int(photo_number), len(padded)))
+    raw = result.get("product_raw") or {}
+    raw[1] = product_image(padded[index - 1], enhance=False)
+    result["product_raw"] = raw
+    if result.get("cover_layers"):
+        result["cover_layers"]["product"] = raw[1]  # placeholder until re-treated below
+    result["cover_photo"] = index
+    result["treatment"] = None  # force contrast/brightness/sharpness to be re-applied
+    result.pop("drag_assets", None)  # re-encode the cover part for the canvas
+
+
 def _reset_editor_state() -> None:
     for key in ("cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
                 "cover_product_x", "cover_product_y", "cover_product_scale",
@@ -559,6 +576,7 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         "batch_total": pending["batch_total"],
         "published": False,
         "product_images": image_urls,
+        "cover_photo": cover_index + 1,
         "paths": generated.paths,
         "warnings": generated.warnings,
         "cover_layers": cover_layers,
@@ -1652,6 +1670,25 @@ def _render_editor_header(result: dict) -> None:
         st.warning(warning, icon=":material/warning:")
 
 
+def _render_cover_photo_buttons(result: dict) -> None:
+    """Botões para escolher qual foto do produto vira a peça da capa (ex.: usar a foto 4 na capa)."""
+    photos = min(4, len(result.get("product_images") or []))
+    if photos <= 1:
+        return
+    current = result.get("cover_photo", 1)
+    with st.container(border=True, key="lmr-card-cover-photo"):
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.markdown("**:material/build: Peça da capa:**")
+            for number in range(1, photos + 1):
+                if st.button(f"Foto {number}", key=f"cover_photo_{result['sku']}_{number}",
+                             type="primary" if number == current else "secondary",
+                             disabled=number == current,
+                             help="Usa esta foto do produto como a peça da capa."):
+                    _set_cover_photo(result, number)
+                    st.rerun()
+            st.caption("Trocar a peça da capa não muda as imagens 2 a 4.")
+
+
 def _render_toolbar(result: dict) -> None:
     with st.container(border=True, key="lmr-card-toolbar"):
         brightness_col, contrast_col, sharpness_col, reset_col, fine_col = st.columns(
@@ -1707,6 +1744,7 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
     ])
     with tabs[0]:
         if result.get("cover_layers"):
+            _render_cover_photo_buttons(result)
             canvas_col, controls_col = _image_tab(fine_tune)
             with canvas_col:
                 vehicle_base, product_base = cover_base_sizes(
