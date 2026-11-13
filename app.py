@@ -348,20 +348,24 @@ def save_vehicle_image(brand: str, model: str, years: str, image: Image.Image) -
 
 DEFAULT_CONTRAST_PCT = 108
 DEFAULT_SHARPNESS_PCT = 100
+DEFAULT_BRIGHTNESS_PCT = 100
 
 
 def _reset_part_treatment() -> None:
     st.session_state["part_contrast"] = DEFAULT_CONTRAST_PCT
     st.session_state["part_sharpness"] = DEFAULT_SHARPNESS_PCT
+    st.session_state["part_brightness"] = DEFAULT_BRIGHTNESS_PCT
 
 
-def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int) -> None:
-    """Re-treat the part (cover layer and images 2-4) when contrast/sharpness change."""
+def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int,
+                          brightness_pct: int = DEFAULT_BRIGHTNESS_PCT) -> None:
+    """Re-treat the part (cover layer and images 2-4) when contrast/sharpness/brightness change."""
     raw = result.get("product_raw")
-    settings = (contrast_pct, sharpness_pct)
+    settings = (contrast_pct, sharpness_pct, brightness_pct)
     if not raw or result.get("treatment") == settings:
         return
-    params = {"contrast": contrast_pct / 100, "sharpness": sharpness_pct / 100}
+    params = {"contrast": contrast_pct / 100, "sharpness": sharpness_pct / 100,
+              "brightness": brightness_pct / 100}
     # Same photo in several positions is treated once; distinct photos in parallel.
     unique = {id(image): image for image in raw.values()}
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -378,7 +382,7 @@ def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int) -
 def _reset_editor_state() -> None:
     for key in ("cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
                 "cover_product_x", "cover_product_y", "cover_product_scale",
-                "part_contrast", "part_sharpness"):
+                "part_contrast", "part_sharpness", "part_brightness"):
         st.session_state.pop(key, None)
     for index in range(2, 5):
         for suffix in ("x", "y", "scale"):
@@ -572,7 +576,8 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         "backup_path": None,
         "product_raw": product_raw,
     }
-    _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT)
+    _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT,
+                          DEFAULT_BRIGHTNESS_PCT)
     _reset_editor_state()
     st.session_state["result"]["review"] = pending
     st.session_state["result"]["review_signature"] = _review_signature(approved_choices)
@@ -1649,10 +1654,13 @@ def _render_editor_header(result: dict) -> None:
 
 def _render_toolbar(result: dict) -> None:
     with st.container(border=True, key="lmr-card-toolbar"):
-        contrast_col, sharpness_col, reset_col, fine_col = st.columns(
-            [3, 3, 1.6, 2.2], vertical_alignment="bottom", gap="medium"
+        brightness_col, contrast_col, sharpness_col, reset_col, fine_col = st.columns(
+            [3, 3, 3, 1.6, 2.2], vertical_alignment="bottom", gap="medium"
         )
         has_raw = bool(result.get("product_raw"))
+        with brightness_col:
+            st.slider("Brilho da peça", 60, 150, step=1, key="part_brightness", format="%d%%",
+                      disabled=not has_raw, help="100% = foto original. Abaixo escurece, acima clareia.")
         with contrast_col:
             st.slider("Contraste da peça", 80, 140, step=1, key="part_contrast", format="%d%%",
                       disabled=not has_raw, help="100% = foto original. Padrão: 108%.")
@@ -1661,7 +1669,7 @@ def _render_toolbar(result: dict) -> None:
                       disabled=not has_raw, help="0% = sem nitidez extra. Padrão: 100%.")
         with reset_col:
             st.button("Padrão", on_click=_reset_part_treatment, width="stretch", disabled=not has_raw,
-                      icon=":material/restart_alt:", help="Volta contraste e nitidez para o padrão.")
+                      icon=":material/restart_alt:", help="Volta brilho, contraste e nitidez para o padrão.")
         with fine_col:
             st.toggle("Ajuste fino", key="fine_tune",
                       help="Mostra as barras de lado, altura e zoom ao lado de cada imagem.")
@@ -2033,6 +2041,7 @@ def render_processor() -> None:
             st.session_state.setdefault(f"{prefix}_color", "#000000")
     st.session_state.setdefault("part_contrast", DEFAULT_CONTRAST_PCT)
     st.session_state.setdefault("part_sharpness", DEFAULT_SHARPNESS_PCT)
+    st.session_state.setdefault("part_brightness", DEFAULT_BRIGHTNESS_PCT)
     st.session_state.setdefault("fine_tune", False)
 
     _render_editor_header(result)
@@ -2040,7 +2049,8 @@ def render_processor() -> None:
     if result.get("product_raw"):
         with loading("Aplicando contraste e nitidez na peça..."):
             _apply_part_treatment(result, st.session_state["part_contrast"],
-                                  st.session_state["part_sharpness"])
+                                  st.session_state["part_sharpness"],
+                                  st.session_state["part_brightness"])
     assets = _drag_assets(result)
     previews = _current_previews(result)
     # Framing checks judge the part only: the text box is decorative and must not trip "off-centre".

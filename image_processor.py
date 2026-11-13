@@ -514,16 +514,19 @@ def validate_output(path: Path | Image.Image, tolerance: int = 24) -> dict[str, 
 PRODUCT_MIN_SIDE = 1400
 DEFAULT_CONTRAST = 1.08
 DEFAULT_SHARPNESS = 1.0
+DEFAULT_BRIGHTNESS = 1.0
 
 
 def enhance_product(
-    image: Image.Image, contrast: float = DEFAULT_CONTRAST, sharpness: float = DEFAULT_SHARPNESS
+    image: Image.Image, contrast: float = DEFAULT_CONTRAST, sharpness: float = DEFAULT_SHARPNESS,
+    brightness: float = DEFAULT_BRIGHTNESS,
 ) -> Image.Image:
     """Make the part photo crisper without touching the white background.
 
     Upscales small photos before they are fitted on the 1200px canvas (so the final resize
     shrinks instead of blurring), adds a little contrast/colour and sharpens edges and texture.
     contrast: 1.0 = unchanged. sharpness: 0 = no extra sharpening, 1 = default, 2 = double.
+    brightness: 1.0 = unchanged, <1 darker, >1 lighter (only the part, not the white background).
     """
     image = image.convert("RGBA")
     longest = max(image.size)
@@ -538,6 +541,8 @@ def enhance_product(
     if sharpness > 0:
         # Smooth JPEG blocks/noise first so sharpening does not turn them into speckles.
         rgb = rgb.filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.5))
+    if brightness != 1:
+        rgb = ImageEnhance.Brightness(rgb).enhance(brightness)
     if contrast != 1:
         rgb = ImageEnhance.Contrast(rgb).enhance(contrast)
     rgb = ImageEnhance.Color(rgb).enhance(1.05)
