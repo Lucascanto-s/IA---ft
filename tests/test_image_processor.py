@@ -72,14 +72,22 @@ def test_content_bands_finds_separate_rows():
     assert content_bands(image) == [(10, 35), (60, 85)]
 
 
-def test_cutout_is_broken_detects_holes():
+def test_cutout_is_broken_detects_eaten_subject():
     from image_processor import cutout_is_broken
 
     solid = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
     solid.paste((50, 50, 50, 255), (40, 40, 160, 160))
     assert cutout_is_broken(solid) is False
 
-    holed = solid.copy()
-    for x in range(50, 150, 20):
-        holed.paste((0, 0, 0, 0), (x, 50, x + 10, 150))
-    assert cutout_is_broken(holed) is True
+    # Poucas aberturas grandes (peça vazada): continua sendo um recorte bom.
+    few_openings = solid.copy()
+    few_openings.paste((0, 0, 0, 0), (60, 60, 95, 140))
+    few_openings.paste((0, 0, 0, 0), (105, 60, 140, 140))
+    assert cutout_is_broken(few_openings) is False
+
+    # Muitos buracos pequenos espalhados (recorte comeu a peça): quebrado.
+    eaten = solid.copy()
+    for x in range(45, 158, 7):
+        for y in range(45, 158, 7):
+            eaten.paste((0, 0, 0, 0), (x, y, x + 3, y + 3))
+    assert cutout_is_broken(eaten) is True
