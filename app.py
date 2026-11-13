@@ -1480,6 +1480,9 @@ def _render_batch_bar() -> None:
                 else:
                     st.badge(sku, color="gray")
             st.space("stretch")
+            if st.button("Encerrar e revisar", icon=":material/fact_check:", key="finish_batch",
+                         help="Para agora (ex.: almoço): salva o SKU aberto e vai ao resumo para publicar os editados."):
+                _confirm_finish_batch()
             if st.button("Novo lote", icon=":material/add:", key="new_batch"):
                 _confirm_new_batch()
         st.progress((current + 1) / total)
@@ -1728,21 +1731,66 @@ def _render_batch_navigation(result: dict, previews: list[Image.Image]) -> None:
         if published:
             _advance_batch("published", result.get("published_cover"), result.get("product_name", ""))
             return
-        # Save the edited images now so the SKU can be published later from the batch summary.
-        publish_data = None
-        cover = previews[0]
-        try:
-            cover = _save_final_images(result)[0]
-            publish_data = {
-                "sku": result["sku"],
-                "product_id": result["product_id"],
-                "product_images": result["product_images"],
-                "paths": list(result["paths"]),
-            }
-        except (OSError, ValueError) as error:
-            st.warning(f"Não foi possível salvar as imagens para publicar depois: {error}",
-                       icon=":material/warning:")
+        cover, publish_data = _save_as_edited(result, previews[0])
         _advance_batch("edited", cover, result.get("product_name", ""), publish_data)
+
+
+def _save_as_edited(result: dict, fallback_cover: Image.Image | None = None) -> tuple:
+    """Write the edited images to disk so the SKU can be published later from the batch summary."""
+    try:
+        cover = _save_final_images(result)[0]
+    except (OSError, ValueError) as error:
+        st.warning(f"Não foi possível salvar as imagens para publicar depois: {error}", icon=":material/warning:")
+        return fallback_cover, None
+    return cover, {
+        "sku": result["sku"],
+        "product_id": result["product_id"],
+        "product_images": result["product_images"],
+        "paths": list(result["paths"]),
+    }
+
+
+@st.dialog("Encerrar o lote e revisar?")
+def _confirm_finish_batch() -> None:
+    st.markdown(
+        "- O SKU aberto agora é **salvo como editado** (se já tiver imagens geradas).\n"
+        "- No resumo, você publica todos os editados de uma vez.\n"
+        "- SKUs que você **não abriu** não são publicados e continuam com a estrela amarela "
+        "para o próximo lote."
+    )
+    with st.container(horizontal=True):
+        if st.button("Encerrar e revisar", type="primary", icon=":material/fact_check:", key="confirm_finish_batch"):
+            _finish_batch_now()
+        if st.button("Continuar editando", key="cancel_finish_batch"):
+            st.rerun()
+
+
+def _finish_batch_now() -> None:
+    """Stop the batch here (e.g. lunch break): keep the open SKU's edits and go to the summary."""
+    batch = st.session_state.get("sku_batch")
+    if not batch:
+        return
+    result = st.session_state.get("result") or _parked_result_for(
+        (st.session_state.get("pending_vehicle_review") or {}).get("sku", ""))
+    if result:
+        if result.get("published"):
+            _record_batch_item("published", result.get("published_cover"), result.get("product_name", ""))
+        else:
+            with loading("Salvando as imagens editadas..."):
+                cover, publish_data = _save_as_edited(result)
+            _record_batch_item("edited", cover, result.get("product_name", ""), publish_data)
+    batch = st.session_state["sku_batch"]
+    batch["completed"] = True
+    st.session_state["sku_batch"] = batch
+    # SKUs never opened go back to the front of the star queue for the next batch.
+    opened = batch.get("summary", {})
+    attempted = st.session_state.setdefault("attempted_skus", set())
+    for index, sku in enumerate(batch["skus"]):
+        if index not in opened and index != batch["current_index"]:
+            attempted.discard(sanitize_sku(sku))
+    for key in ("result", "pending_vehicle_review", "batch_error", "parked_result"):
+        st.session_state.pop(key, None)
+    st.rerun()
 
 
 # ---------- Step navigation: go back without losing edits or re-processing ----------
