@@ -1,20 +1,93 @@
-[theme]
-base = "light"
-primaryColor = "#0e7490"
-linkColor = "#0e7490"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f1f5f9"
-textColor = "#0f172a"
-borderColor = "#e2e8f0"
-showWidgetBorder = true
-baseRadius = "0.6rem"
-font = "sans serif"
-paddingTop = "2.5rem"
-
-[theme.sidebar]
-backgroundColor = "#f8fafc"
-secondaryBackgroundColor = "#ffffff"
+# LMR Edit: dark "VS Code" base with neon blue accents (cyberpunk).
+# Glow, cut corners and the loading animation live in ui/style.css.
 
 [server]
 maxUploadSize = 15
 enableXsrfProtection = true
+enableStaticServing = true   # serves static/ (fonts, logo, icons) so everything works offline
+
+[client]
+toolbarMode = "minimal"
+
+# Self-hosted fonts (static/fonts): no internet needed.
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/inter-latin-400-normal.woff2"
+weight = 400
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/inter-latin-500-normal.woff2"
+weight = 500
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/inter-latin-600-normal.woff2"
+weight = 600
+[[theme.fontFaces]]
+family = "Chakra Petch"
+url = "app/static/fonts/chakra-petch-latin-500-normal.woff2"
+weight = 500
+[[theme.fontFaces]]
+family = "Chakra Petch"
+url = "app/static/fonts/chakra-petch-latin-600-normal.woff2"
+weight = 600
+[[theme.fontFaces]]
+family = "Chakra Petch"
+url = "app/static/fonts/chakra-petch-latin-700-normal.woff2"
+weight = 700
+[[theme.fontFaces]]
+family = "JetBrains Mono"
+url = "app/static/fonts/jetbrains-mono-latin-400-normal.woff2"
+weight = 400
+[[theme.fontFaces]]
+family = "JetBrains Mono"
+url = "app/static/fonts/jetbrains-mono-latin-500-normal.woff2"
+weight = 500
+[[theme.fontFaces]]
+family = "Orbitron"
+url = "app/static/fonts/orbitron-latin-700-normal.woff2"
+weight = 700
+[[theme.fontFaces]]
+family = "Orbitron"
+url = "app/static/fonts/orbitron-latin-900-normal.woff2"
+weight = 900
+
+[theme]
+base = "dark"
+primaryColor = "#0078d4"            # VS Code blue: white button text stays readable
+backgroundColor = "#0d0d0f"
+secondaryBackgroundColor = "#1a1a20"
+textColor = "#d4d4d4"
+linkColor = "#00b4ff"
+borderColor = "#2a2a33"
+showWidgetBorder = true
+showSidebarBorder = true
+codeBackgroundColor = "#16161a"
+codeTextColor = "#00e5ff"
+
+font = "Inter"
+headingFont = "Chakra Petch"
+codeFont = "JetBrains Mono"
+baseFontSize = 15
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+baseRadius = "4px"
+buttonRadius = "2px"
+linkUnderline = false
+paddingTop = "2rem"
+
+blueColor = "#00b4ff"
+greenColor = "#00ff9c"
+yellowColor = "#ffcc00"
+orangeColor = "#ff9f1c"
+redColor = "#ff3864"
+violetColor = "#8b7bff"
+grayColor = "#8a8a99"
+
+[theme.sidebar]
+backgroundColor = "#111115"
+secondaryBackgroundColor = "#1a1a20"
+codeBackgroundColor = "#16161a"
+codeTextColor = "#00e5ff"
+textColor = "#d4d4d4"
+borderColor = "#2a2a33"
+primaryColor = "#0078d4"
+linkColor = "#00b4ff"

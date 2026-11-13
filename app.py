@@ -32,7 +32,7 @@ from image_processor import (
 )
 from project_utils import normalized_tokens, sanitize_sku
 from ui.drag_canvas import drag_canvas, image_data_url
-from ui.theme import apply_theme, flow_steps
+from ui.theme import ICON, apply_theme, flow_steps, loading, page_header
 from vehicle_search import VehicleSearchError, find_vehicle_images
 
 
@@ -45,10 +45,10 @@ VEHICLE_MAP_FILE = Path(os.getenv("VEHICLE_MAP_FILE", FILES_DIR / "mapa" / "vehi
 PREVIEW_PAIR = 480
 PREVIEW_WIDE = 720
 PREVIEW_THUMB = 280
+NEON_FRAME = "#00b4ff"  # screen-only frame around white images (never in the exported files)
 VEHICLE_LIBRARY_FILE = FILES_DIR / "mapa" / "vehicles.csv"
 
-st.set_page_config(page_title="Studio de imagens | Autopeças", page_icon=":material/photo_camera:", layout="wide")
-apply_theme()
+st.set_page_config(page_title="LMR Edit", page_icon=str(ICON), layout="wide")
 
 
 def _years(value: str) -> set[int]:
@@ -625,7 +625,7 @@ def _framed(image: Image.Image) -> Image.Image:
     """Screen-only black border so the white canvas does not blend into the page."""
     flat = Image.new("RGBA", image.size, (255, 255, 255, 255))
     flat.alpha_composite(image.convert("RGBA"))
-    return ImageOps.expand(flat.convert("RGB"), border=4, fill="black")
+    return ImageOps.expand(flat.convert("RGB"), border=4, fill=NEON_FRAME)
 
 
 def _square_thumb(image: Image.Image, side: int = 420) -> Image.Image:
@@ -633,7 +633,7 @@ def _square_thumb(image: Image.Image, side: int = 420) -> Image.Image:
     flat = Image.new("RGBA", image.size, (255, 255, 255, 255))
     flat.alpha_composite(image.convert("RGBA"))
     square = ImageOps.pad(flat.convert("RGB"), (side, side), color="white")
-    return ImageOps.expand(square, border=3, fill="#cbd5e1")
+    return ImageOps.expand(square, border=3, fill=NEON_FRAME)
 
 
 def _save_final_images(result: dict) -> list[Image.Image]:
@@ -686,7 +686,7 @@ def _render_copy_cars_from_sku(pending: dict) -> None:
                 st.error("Informe o SKU.")
             else:
                 try:
-                    with st.spinner(f"Lendo a capa do SKU {other_sku}..."):
+                    with loading(f"Lendo a capa do SKU {other_sku}..."):
                         st.session_state[state_key] = {"sku": other_sku, "image": _cars_from_sku_cover(other_sku)}
                 except (BaseLinkerError, ValueError, OSError) as error:
                     st.session_state.pop(state_key, None)
@@ -739,8 +739,7 @@ def _render_sku_title(sku: str, name: str, batch_index: int = 0, batch_total: in
     """Big product name (what the cars are read from) with the SKU and batch position above it."""
     with st.container(horizontal=True, vertical_alignment="center", gap="small"):
         st.badge(f"SKU {sku}", icon=":material/sell:", color="blue")
-        if batch_total > 1:
-            st.badge(f"Lote: {batch_index + 1} de {batch_total}", color="violet")
+        # Batch position is shown in the progress bar above (_render_batch_bar).
         for vehicle in vehicles or []:
             st.badge(_fitment_label(vehicle), icon=":material/directions_car:", color="gray")
         if published:
@@ -779,7 +778,7 @@ def _advance_batch(status: str, cover: Image.Image | None = None, name: str = ""
                    publish_data: dict | None = None) -> None:
     """Record the current SKU and open the next one (or the checklist after the last one)."""
     _record_batch_item(status, cover, name, publish_data)
-    with st.spinner("Abrindo o próximo SKU do lote..."):
+    with loading("Abrindo o próximo SKU do lote..."):
         _load_next_batch_sku()
     st.rerun()
 
@@ -818,7 +817,7 @@ def _render_batch_summary(batch: dict) -> None:
         for offset, entry in enumerate(entries[start:start + per_row]):
             index = start + offset
             label, icon, color = BATCH_STATUS[entry["status"]]
-            with columns[offset], st.container(border=True):
+            with columns[offset], st.container(border=True, key=f"lmr-card-batch-{index}"):
                 with st.container(horizontal_alignment="center"):
                     if entry.get("cover") is not None:
                         st.image(_square_thumb(entry["cover"]), width=PREVIEW_THUMB,
@@ -847,7 +846,7 @@ def _render_publish_all(batch: dict, entries: list[dict]) -> None:
              if entry["status"] == "edited" and entry.get("publish_data")]
     if not ready:
         return
-    with st.container(border=True):
+    with st.container(border=True, key="lmr-card-publish-all"):
         st.markdown(f"**:material/publish: {len(ready)} SKU(s) editado(s) prontos para publicar**")
         st.caption(
             ":material/info: Cada publicação substitui as posições 1 a 4 e preserva as fotos da posição 5 "
@@ -929,7 +928,7 @@ def _render_vehicle_review() -> None:
                 st.error("Informe pelo menos uma marca e um modelo.")
             else:
                 pending["fitments"] = fitments
-                with st.spinner("Buscando primeiro no catálogo local e depois na internet..."):
+                with loading("Buscando primeiro no catálogo local e depois na internet..."):
                     pending["choices"] = _search_fitments(pending, fitments)
                 st.session_state["pending_vehicle_review"] = pending
                 st.rerun()
@@ -999,7 +998,7 @@ def _render_vehicle_review() -> None:
                     choice["image"] = load_image(choice["source"])
                     choice["cutout"] = None
                 if choice.get("cutout") is None:
-                    with st.spinner("Recortando o veículo..."):
+                    with loading("Recortando o veículo..."):
                         cutout = prepare_vehicle_image(choice["image"])
                         choice["cutout"] = ImageOps.pad(
                             cutout.convert("RGBA"), (900, 450), color=(255, 255, 255, 255)
@@ -1127,9 +1126,9 @@ def _render_vehicle_review() -> None:
                 else:
                     if not pasted_url.startswith(("http://", "https://")):
                         raise ValueError("o endereço precisa começar com http:// ou https://")
-                    with st.spinner("Baixando a imagem..."):
+                    with loading("Baixando a imagem..."):
                         manual_image = load_image(pasted_url)
-                with st.spinner("Recortando o veículo..."):
+                with loading("Recortando o veículo..."):
                     manual_cutout = ImageOps.pad(
                         prepare_vehicle_image(manual_image).convert("RGBA"), (900, 450),
                         color=(255, 255, 255, 255),
@@ -1176,7 +1175,7 @@ def _render_vehicle_review() -> None:
 
     approved = [choice for choice in choices if choice["status"] == "approved"]
     unresolved = [choice for choice in choices if choice["status"] not in ("approved", "discarded")]
-    with st.container(border=True):
+    with st.container(border=True, key="lmr-card-vehicle-status"):
         st.markdown("**:material/checklist: Status dos veículos**")
         with st.container(horizontal=True, gap="small"):
             for choice in choices:
@@ -1213,7 +1212,7 @@ def _generate_from_review(pending: dict, choices: list[dict]) -> None:
         st.warning("Aprove pelo menos uma imagem de veículo para gerar a capa.", icon=":material/warning:")
         return
     try:
-        with st.spinner("Gerando a capa e as imagens 2 a 4..."):
+        with loading("Gerando a capa e as imagens 2 a 4..."):
             _generate_sku(pending, approved)
     except (BaseLinkerError, ValueError, VehicleSearchError, OSError) as error:
         st.error(str(error), icon=":material/error:")
@@ -1253,52 +1252,90 @@ def _status_label() -> tuple[str, str, str]:
     return "Aguardando SKU", ":material/hourglass_empty:", "gray"
 
 
-def _render_sidebar() -> None:
-    with st.sidebar:
-        st.subheader("Lote de SKUs", icon=":material/inventory_2:")
+def _reset_batch() -> None:
+    for key in ("sku_batch", "result", "pending_vehicle_review", "batch_error"):
+        st.session_state.pop(key, None)
+
+
+def _start_batch_from_text(queue_text: str) -> None:
+    skus = list(dict.fromkeys(item.strip() for item in re.split(r"[\n,;\s]+", queue_text) if item.strip()))
+    if not skus:
+        st.error("Informe pelo menos um SKU.", icon=":material/error:")
+        return
+    if len(skus) > 10:
+        st.error("O lote aceita no máximo 10 SKUs.", icon=":material/error:")
+        return
+    try:
+        with loading(f"Consultando {len(skus)} SKU(s) no BaseLinker..."):
+            _start_sku_batch(skus)
+    except (BaseLinkerError, ValueError, VehicleSearchError, OSError) as error:
+        st.error(str(error), icon=":material/error:")
+        return
+    st.rerun()
+
+
+def _render_batch_start() -> None:
+    """Central panel shown when no batch is running: paste SKUs and start."""
+    _, center, _ = st.columns([1, 2.2, 1])
+    with center, st.container(border=True, key="lmr-card-start"):
+        st.subheader("Novo lote de SKUs", icon=":material/inventory_2:")
+        st.caption("Cole de 1 a 10 SKUs, um por linha (também aceita vírgula ou espaço).")
         queue_text = st.text_area(
-            "SKUs, um por linha",
+            "SKUs do lote",
             placeholder="00010280\n00004278\n00002185",
             key="sku_batch_input",
-            height=150,
-            help="De 1 a 10 SKUs. Também aceita separar por vírgula ou ponto e vírgula.",
+            height=160,
+            label_visibility="collapsed",
         )
-        if st.button("Iniciar lote", width="stretch", type="primary", icon=":material/play_arrow:"):
-            skus = list(dict.fromkeys(
-                item.strip() for item in re.split(r"[\n,;]+", queue_text) if item.strip()
-            ))
-            if not skus:
-                st.error("Informe pelo menos um SKU.")
-            elif len(skus) > 10:
-                st.error("O lote aceita no máximo 10 SKUs.")
-            else:
-                st.session_state["sku_batch"] = {
-                    "skus": skus,
-                    "items": [],
-                    "current_index": 0,
-                    "completed": False,
-                }
-                try:
-                    with st.spinner(f"Consultando {len(skus)} SKU(s) no BaseLinker..."):
-                        _start_sku_batch(skus)
-                    st.rerun()
-                except (BaseLinkerError, ValueError, VehicleSearchError, OSError) as error:
-                    st.error(str(error))
-        st.caption("O lote consulta os produtos de uma vez; você aprova cada um antes de seguir.")
+        if st.button("Iniciar lote", type="primary", icon=":material/play_arrow:", key="start_batch",
+                     width="stretch"):
+            _start_batch_from_text(queue_text)
+        st.divider()
+        st.markdown(
+            ":gray[:material/looks_one: Confira os carros compatíveis · "
+            ":material/looks_two: arraste a peça no editor (**Ctrl + roda** = zoom) · "
+            ":material/looks_3: revise e publique no BaseLinker]"
+        )
 
-        st.space("small")
-        label, icon, color = _status_label()
-        st.badge(label, icon=icon, color=color)
-        batch = st.session_state.get("sku_batch")
-        if batch and not batch.get("completed"):
-            current = batch["current_index"] + 1
-            st.progress(current / len(batch["skus"]), text=f"SKU {current} de {len(batch['skus'])}")
-            st.caption(" · ".join(
-                f"**{sku}**" if index == batch["current_index"] else sku
-                for index, sku in enumerate(batch["skus"])
-            ))
-        elif batch and batch.get("completed"):
-            st.caption(f"Lote de {len(batch['skus'])} SKU(s) concluído.")
+
+@st.dialog("Começar um novo lote?")
+def _confirm_new_batch() -> None:
+    st.markdown("O lote atual será fechado. SKUs ainda **não publicados** ficam sem publicar.")
+    with st.container(horizontal=True):
+        if st.button("Sim, novo lote", type="primary", icon=":material/restart_alt:", key="confirm_new_batch"):
+            _reset_batch()
+            st.rerun()
+        if st.button("Continuar no lote atual", key="cancel_new_batch"):
+            st.rerun()
+
+
+def _render_batch_bar() -> None:
+    """Compact progress line while a batch is open: status, SKU chips, progress and 'new batch'."""
+    batch = st.session_state.get("sku_batch")
+    if not batch or batch.get("completed"):
+        return
+    current = batch["current_index"]
+    total = len(batch["skus"])
+    summary = batch.get("summary", {})
+    with st.container(border=True, key="lmr-card-batchbar"):
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            label, icon, color = _status_label()
+            st.badge(label, icon=icon, color=color)
+            st.markdown(f"**SKU {current + 1} de {total}**", width="content")
+            for index, sku in enumerate(batch["skus"]):
+                status = (summary.get(index) or {}).get("status")
+                if index == current:
+                    st.badge(sku, icon=":material/radio_button_checked:", color="blue")
+                elif status == "published":
+                    st.badge(sku, icon=":material/check_circle:", color="green")
+                elif status:
+                    st.badge(sku, icon=BATCH_STATUS[status][1], color=BATCH_STATUS[status][2])
+                else:
+                    st.badge(sku, color="gray")
+            st.space("stretch")
+            if st.button("Novo lote", icon=":material/add:", key="new_batch"):
+                _confirm_new_batch()
+        st.progress((current + 1) / total)
 
 
 def _render_batch_error(batch_error: dict) -> None:
@@ -1309,7 +1346,7 @@ def _render_batch_error(batch_error: dict) -> None:
             batch = st.session_state["sku_batch"]
             index = batch["current_index"]
             try:
-                with st.spinner(f"Consultando {batch['skus'][index]}..."):
+                with loading(f"Consultando {batch['skus'][index]}..."):
                     item = _fetch_sku_data(batch["skus"][index])
                 batch["items"][index] = item
                 st.session_state["sku_batch"] = batch
@@ -1328,19 +1365,14 @@ def _render_batch_error(batch_error: dict) -> None:
 def _render_empty_state() -> None:
     batch = st.session_state.get("sku_batch")
     if batch and batch.get("completed"):
-        st.success("Lote concluído. Cole novos SKUs na barra lateral para começar outro.",
-                   icon=":material/task_alt:")
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.success("Lote concluído.", icon=":material/task_alt:", width="stretch")
+            if st.button("Novo lote", type="primary", icon=":material/add:", key="new_batch_done"):
+                _reset_batch()
+                st.rerun()
         _render_batch_summary(batch)
         return
-    with st.container(border=True):
-        st.subheader("Comece pela barra lateral", icon=":material/arrow_back:")
-        st.markdown(
-            "1. Cole os SKUs (um por linha) e clique em **Iniciar lote**.\n"
-            "2. Confira os carros compatíveis e aprove as imagens.\n"
-            "3. Ajuste a capa e as imagens 2 a 4: **arraste a peça com o mouse**, "
-            "segure **Ctrl + roda do mouse** para o zoom.\n"
-            "4. Revise e publique no BaseLinker."
-        )
+    _render_batch_start()
 
 
 def _render_editor_header(result: dict) -> None:
@@ -1352,7 +1384,7 @@ def _render_editor_header(result: dict) -> None:
 
 
 def _render_toolbar(result: dict) -> None:
-    with st.container(border=True):
+    with st.container(border=True, key="lmr-card-toolbar"):
         contrast_col, sharpness_col, reset_col, fine_col = st.columns(
             [3, 3, 1.6, 2.2], vertical_alignment="bottom", gap="medium"
         )
@@ -1422,10 +1454,10 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
                 _framing_badge(reports[0], cover=True)
             if controls_col:
                 with controls_col:
-                    with st.container(border=True):
+                    with st.container(border=True, key="lmr-card-vehicle-sliders"):
                         st.markdown("**:material/directions_car: Veículos**")
                         _position_sliders("cover_vehicle")
-                    with st.container(border=True):
+                    with st.container(border=True, key="lmr-card-product-sliders"):
                         st.markdown("**:material/build: Peça**")
                         _position_sliders("cover_product")
         else:
@@ -1449,13 +1481,13 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
                 _framing_badge(reports[index - 1])
             if controls_col:
                 with controls_col:
-                    with st.container(border=True):
+                    with st.container(border=True, key=f"lmr-card-sliders-{index}"):
                         st.markdown("**:material/build: Peça**")
                         _position_sliders(f"image_{index}")
 
 
 def _render_publish(result: dict, previews: list[Image.Image], reports: list[dict]) -> None:
-    with st.container(border=True):
+    with st.container(border=True, key="lmr-card-publish"):
         st.subheader("Revisar e publicar", icon=":material/cloud_upload:")
         invalid = [str(index) for index, report in enumerate(reports, start=1) if not report["valid"]]
         if invalid:
@@ -1566,7 +1598,7 @@ def _flow_stage() -> int:
 
 def render_processor() -> None:
     flow_steps(_flow_stage())
-    _render_sidebar()
+    _render_batch_bar()
 
     batch_error = st.session_state.get("batch_error")
     if batch_error:
@@ -1593,7 +1625,7 @@ def render_processor() -> None:
     _render_editor_header(result)
     _render_toolbar(result)
     if result.get("product_raw"):
-        with st.spinner("Aplicando contraste e nitidez na peça..."):
+        with loading("Aplicando contraste e nitidez na peça..."):
             _apply_part_treatment(result, st.session_state["part_contrast"],
                                   st.session_state["part_sharpness"])
     assets = _drag_assets(result)
@@ -1628,7 +1660,7 @@ def render_cover_import() -> None:
 
 
 def render_vehicle_registration() -> None:
-    with st.container(border=True):
+    with st.container(border=True, key="lmr-card-cover-import"):
         render_cover_import()
     st.subheader("Cadastrar veículo", icon=":material/add_photo_alternate:")
     st.caption("Cadastre uma imagem do veículo para reutilizá-la nas próximas buscas.")
@@ -1653,10 +1685,22 @@ def render_vehicle_registration() -> None:
             st.error(str(error))
 
 
-st.title("Studio de imagens de autopeças", icon=":material/photo_camera:")
-st.caption("Gere, ajuste e publique as imagens dos anúncios com segurança.")
-process_tab, vehicle_tab = st.tabs([":material/auto_awesome: Processar SKU", ":material/directions_car: Catálogo de veículos"])
-with process_tab:
+def processar() -> None:
+    page_header("Processar SKU", "Gere, ajuste e publique as imagens dos anúncios com segurança.", icon="photo-cog")
     render_processor()
-with vehicle_tab:
+
+
+def catalogo() -> None:
+    page_header("Catálogo de veículos", "Importe carros das capas e cadastre novas imagens de veículos.", icon="car")
     render_vehicle_registration()
+
+
+apply_theme()
+PAGES = [
+    st.Page(processar, title="Processar SKU", icon=":material/auto_awesome:", default=True,
+            help="Lote de SKUs: buscar no BaseLinker, aprovar veículos, ajustar as quatro imagens e publicar."),
+    st.Page(catalogo, title="Catálogo de veículos", icon=":material/directions_car:",
+            help="Importar carros das capas do BaseLinker e cadastrar imagens de veículos para as próximas buscas."),
+    # Next step (login): an admin-only page is appended here when the user is an administrator.
+]
+st.navigation(PAGES, position="top").run()

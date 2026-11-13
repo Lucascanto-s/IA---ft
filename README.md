@@ -1,4 +1,4 @@
-# Studio de imagens para anuncios
+﻿# LMR Edit — imagens para anúncios de autopeças
 
 Ferramenta Streamlit para processar imagens de autopecas a partir de SKUs do BaseLinker,
 com revisao visual, fila de trabalho e publicacao protegida.
@@ -84,3 +84,10 @@ PUBLIC_IMAGE_BASE_URL=https://imagens.exemplo.com/saida
 Para o SKU `00010278`, a imagem final sera publicada em uma URL como
 `https://imagens.exemplo.com/saida/00010278/1.jpg`. O servidor precisa servir
 essa pasta com HTTPS e permitir acesso sem login para o BaseLinker.
+
+## Visual (LMR Edit)
+
+- Tema escuro com azul neon em `.streamlit/config.toml`; brilho, cantos HUD e carregamento em `ui/style.css`.
+- Fontes (Inter, Chakra Petch, JetBrains Mono, Orbitron) e ícones Tabler ficam em `static/`, servidos localmente (funciona offline).
+- Logo e ícone: `python tools/make_brand.py` gera `static/branding/` (PNG e `.ico`).
+- Depois de alterar arquivos em `ui/` ou `.streamlit/config.toml`, reinicie o `streamlit run` para garantir que carregou.

@@ -1,0 +1,181 @@
+/* LMR Edit: cyberpunk layer on top of the native theme (.streamlit/config.toml).
+   Colours and fonts come from the theme; this file only adds glow, HUD corners, the
+   background grid and the loading animation. Selectors use our own classes (.lmr-*),
+   our keyed containers (.st-key-lmr-*) and plain HTML tags; the few Streamlit
+   attributes used are marked "streamlit:" so they are easy to fix after an upgrade. */
+
+:root {
+  --lmr-neon: #00b4ff;
+  --lmr-cyan: #00e5ff;
+  --lmr-bg: #0d0d0f;
+  --lmr-panel: #141419;
+  --lmr-line: #2a2a33;
+  --lmr-glow: 0 0 6px rgba(0, 180, 255, 0.55), 0 0 18px rgba(0, 180, 255, 0.25);
+}
+
+/* streamlit: app root. Faint grid + top light, like a HUD. */
+.stApp {
+  background-color: var(--lmr-bg);
+  background-image:
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(0, 120, 212, 0.18), transparent 70%),
+    linear-gradient(rgba(0, 180, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 180, 255, 0.035) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+  background-attachment: fixed;
+}
+
+::selection { background: rgba(0, 180, 255, 0.35); color: #fff; }
+
+* { scrollbar-color: #2f3a48 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2f3a48; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--lmr-neon); }
+
+/* Headings: light neon edge */
+h1, h2, h3 { letter-spacing: 0.02em; text-shadow: 0 0 14px rgba(0, 180, 255, 0.25); }
+
+/* ---------- Page header (ui/theme.py: page_header) ---------- */
+.lmr-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--lmr-line);
+  position: relative;
+}
+.lmr-hero::after {            /* neon segment on the divider */
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 160px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--lmr-cyan), transparent);
+  box-shadow: var(--lmr-glow);
+}
+.lmr-hero__icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--lmr-cyan);
+  border: 1px solid var(--lmr-neon);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  background: rgba(0, 180, 255, 0.08);
+  filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.6));
+}
+.lmr-hero__icon img { width: 26px; height: 26px; display: block; }
+.lmr-hero__brand {
+  font-family: "Orbitron", "Chakra Petch", sans-serif;
+  font-weight: 900;
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  color: var(--lmr-neon);
+  text-shadow: var(--lmr-glow);
+  margin: 0;
+}
+.lmr-hero__title {
+  font-family: "Chakra Petch", sans-serif;
+  font-weight: 700;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  color: #ffffff;
+  margin: 2px 0 0;
+}
+.lmr-hero__sub { margin: 4px 0 0; color: #8a8a99; font-size: 0.9rem; }
+
+/* ---------- Buttons ---------- */
+/* streamlit: primary buttons carry kind="primary" */
+button[kind="primary"],
+button[kind="primaryFormSubmit"] {
+  border: 1px solid var(--lmr-neon) !important;
+  box-shadow: 0 0 0 rgba(0, 180, 255, 0);
+  transition: box-shadow 0.2s, transform 0.1s;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: "Chakra Petch", sans-serif;
+  font-weight: 600;
+}
+button[kind="primary"]:hover:not(:disabled),
+button[kind="primaryFormSubmit"]:hover:not(:disabled) {
+  box-shadow: var(--lmr-glow);
+}
+button[kind="primary"]:active:not(:disabled) { transform: translateY(1px); }
+button[kind="secondary"]:hover:not(:disabled) {
+  border-color: var(--lmr-neon) !important;
+  color: var(--lmr-cyan) !important;
+}
+
+/* ---------- HUD cards: st.container(key="lmr-card-...") ---------- */
+[class*="st-key-lmr-card"] {
+  position: relative;
+  background: linear-gradient(180deg, rgba(26, 26, 32, 0.92), rgba(18, 18, 22, 0.92));
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+[class*="st-key-lmr-card"]:hover {
+  border-color: rgba(0, 180, 255, 0.55);
+  box-shadow: 0 0 14px rgba(0, 180, 255, 0.12);
+}
+[class*="st-key-lmr-card"]::before,
+[class*="st-key-lmr-card"]::after {   /* corner brackets */
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: var(--lmr-neon);
+  border-style: solid;
+  filter: drop-shadow(0 0 3px rgba(0, 180, 255, 0.8));
+}
+[class*="st-key-lmr-card"]::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+[class*="st-key-lmr-card"]::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+/* ---------- Neon loader (ui/theme.py: loading) ---------- */
+.lmr-loader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid rgba(0, 180, 255, 0.35);
+  background: rgba(0, 180, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+.lmr-loader::after {               /* scan line sweeping across */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 255, 0.18), transparent);
+  transform: translateX(-100%);
+  animation: lmr-scan 1.6s linear infinite;
+}
+.lmr-loader__ring {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 2px solid rgba(0, 180, 255, 0.2);
+  border-top-color: var(--lmr-cyan);
+  border-right-color: var(--lmr-neon);
+  border-radius: 50%;
+  animation: lmr-spin 0.8s linear infinite;
+  box-shadow: 0 0 10px rgba(0, 180, 255, 0.45);
+}
+.lmr-loader__text {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--lmr-cyan);
+  letter-spacing: 0.04em;
+}
+.lmr-loader__text::after { content: "_"; animation: lmr-blink 1s steps(1) infinite; }
+
+@keyframes lmr-spin { to { transform: rotate(360deg); } }
+@keyframes lmr-scan { to { transform: translateX(100%); } }
+@keyframes lmr-blink { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lmr-loader::after, .lmr-loader__ring, .lmr-loader__text::after { animation: none; }
+}
+
+/* ---------- Monospace for SKUs and numbers: st.markdown(":blue[`00010289`]") etc. ---------- */
+code { letter-spacing: 0.02em; }

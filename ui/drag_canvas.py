@@ -32,7 +32,8 @@ _CSS = """
   margin: 0 auto;
   aspect-ratio: 1 / 1;
   background: #ffffff;
-  border: 4px solid #000000;
+  border: 3px solid #00b4ff;
+  box-shadow: 0 0 8px rgba(0, 180, 255, 0.6), 0 0 24px rgba(0, 180, 255, 0.25);
   box-sizing: border-box;
   overflow: hidden;
   overflow: clip; /* clip cannot be scrolled when a layer sticks out and gets focus */
