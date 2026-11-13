@@ -566,7 +566,25 @@ def _clean_product(source: str) -> Image.Image:
             cleaned.info["from_cover"] = True
             return cleaned
         return trim_white_borders(whiten_background(image))
-    return trim_white_borders(remove_background(image))
+    cutout = remove_background(image)
+    if cutout_is_broken(cutout):
+        # Close-ups (labels, plates) fill the frame: the cutout eats parts of them. Keep the photo whole.
+        return image
+    return trim_white_borders(cutout)
+
+
+def cutout_is_broken(cutout: Image.Image, max_holes: float = 0.08) -> bool:
+    """True when background removal left holes inside the part (e.g. a label photographed up close).
+
+    A good cutout is a solid shape (~0% holes); a broken one had pieces of the subject taken as background.
+    """
+    from scipy.ndimage import binary_fill_holes
+
+    solid = np.array(cutout.getchannel("A")) > 128
+    if solid.sum() < solid.size * 0.02:
+        return True
+    filled = binary_fill_holes(solid)
+    return bool((filled.sum() - solid.sum()) / filled.sum() > max_holes)
 
 
 def product_image(source: str, enhance: bool = True) -> Image.Image:

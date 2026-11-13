@@ -70,3 +70,16 @@ def test_content_bands_finds_separate_rows():
     image.paste((0, 0, 0), (0, 10, 20, 35))
     image.paste((0, 0, 0), (0, 60, 20, 85))
     assert content_bands(image) == [(10, 35), (60, 85)]
+
+
+def test_cutout_is_broken_detects_holes():
+    from image_processor import cutout_is_broken
+
+    solid = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+    solid.paste((50, 50, 50, 255), (40, 40, 160, 160))
+    assert cutout_is_broken(solid) is False
+
+    holed = solid.copy()
+    for x in range(50, 150, 20):
+        holed.paste((0, 0, 0, 0), (x, 50, x + 10, 150))
+    assert cutout_is_broken(holed) is True

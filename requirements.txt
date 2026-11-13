@@ -5,3 +5,4 @@ requests>=2.31
 rembg>=2.0
 streamlit>=1.32
 onnxruntime>=1.17
+scipy>=1.11
