@@ -28,7 +28,8 @@ MAX_FAILED_LOGINS = 5
 LOCK_MINUTES = 5
 MIN_PASSWORD = 8
 
-ROLES = {"admin": "Administrador", "operador": "Operador"}
+ROLES = {"master": "Administrador máximo", "admin": "Administrador", "operador": "Operador"}
+ADMIN_ROLES = {"master", "admin"}
 # Permission id -> label shown in the "Usuários" page. Administrators always have all of them.
 PERMISSIONS = {
     "processar": "Processar SKUs (gerar e ajustar imagens)",
@@ -102,6 +103,10 @@ def init_db() -> None:
             );
             """
         )
+        # Older databases had no "master": the first administrator becomes the top administrator.
+        if db.execute("SELECT 1 FROM usuarios WHERE papel = 'master'").fetchone() is None:
+            db.execute("UPDATE usuarios SET papel = 'master' WHERE id = "
+                       "(SELECT MIN(id) FROM usuarios WHERE papel = 'admin')")
 
 
 def _now() -> datetime:
@@ -154,7 +159,26 @@ def has_users() -> bool:
 def can(user: dict | None, permission: str) -> bool:
     if not user or not user.get("ativo"):
         return False
-    return user["papel"] == "admin" or permission in user["permissoes"]
+    return user["papel"] in ADMIN_ROLES or permission in user["permissoes"]
+
+
+def assignable_roles(actor: dict | None) -> list[str]:
+    """Roles the actor may give: only the top administrator creates administrators."""
+    if actor and actor.get("papel") == "master":
+        return list(ROLES)
+    return ["operador"]
+
+
+def can_manage(actor: dict | None, target: dict | None) -> bool:
+    """Top administrator manages everyone else; admins and 'usuarios' operators manage operators only."""
+    if not actor or not target or actor["id"] == target["id"] or not can(actor, "usuarios"):
+        return False
+    return actor["papel"] == "master" or target["papel"] == "operador"
+
+
+def _require_manage(actor: dict | None, user_id: int) -> None:
+    if actor is not None and not can_manage(actor, get_user(user_id)):
+        raise AuthError("Você não tem permissão para alterar este login.")
 
 
 def list_users() -> list[dict]:
@@ -170,8 +194,11 @@ def get_user(user_id: int) -> dict | None:
 
 
 def create_user(email: str, nome: str, password: str, papel: str = "operador",
-                permissoes: list[str] | None = None, trocar_senha: bool = False) -> dict:
+                permissoes: list[str] | None = None, trocar_senha: bool = False,
+                actor: dict | None = None) -> dict:
     init_db()
+    if actor is not None and papel not in assignable_roles(actor):
+        raise AuthError("Só o administrador máximo cria administradores.")
     email = email.strip().lower()
     nome = nome.strip()
     if "@" not in email or "." not in email.split("@")[-1]:
@@ -201,14 +228,14 @@ def register_self(email: str, nome: str, password: str) -> dict:
     return create_user(email, nome, password, papel="operador", permissoes=[])
 
 
-# Admins shipped inside the install zip (email, name and scrypt hash only, never the password).
+# Top administrators shipped inside the install zip (email, name and scrypt hash only, never the password).
 SEED_FILE = PROJECT_DIR / "dados_iniciais" / "admins.json"
 
 
 def export_admins() -> list[dict]:
     init_db()
     with _db() as db:
-        rows = db.execute("SELECT email, nome, senha_hash FROM usuarios WHERE papel = 'admin' AND ativo = 1")
+        rows = db.execute("SELECT email, nome, senha_hash FROM usuarios WHERE papel = 'master' AND ativo = 1")
         return [dict(row) for row in rows.fetchall()]
 
 
@@ -223,30 +250,34 @@ def seed_admins_from_package() -> None:
                 continue
             db.execute(
                 "INSERT OR IGNORE INTO usuarios (email, nome, senha_hash, papel, permissoes, criado_em) "
-                "VALUES (?, ?, ?, 'admin', '[]', ?)",
+                "VALUES (?, ?, ?, 'master', '[]', ?)",
                 (admin["email"].strip().lower(), admin["nome"], admin["senha_hash"], _now().isoformat()),
             )
 
 
-def _active_admins(db: sqlite3.Connection, excluding: int | None = None) -> int:
+def _active_masters(db: sqlite3.Connection, excluding: int | None = None) -> int:
     row = db.execute(
-        "SELECT COUNT(*) FROM usuarios WHERE papel = 'admin' AND ativo = 1 AND id != ?",
+        "SELECT COUNT(*) FROM usuarios WHERE papel = 'master' AND ativo = 1 AND id != ?",
         (excluding if excluding is not None else -1,),
     ).fetchone()
     return int(row[0])
 
 
 def update_user(user_id: int, *, nome: str | None = None, papel: str | None = None,
-                permissoes: list[str] | None = None, ativo: bool | None = None) -> dict:
+                permissoes: list[str] | None = None, ativo: bool | None = None,
+                actor: dict | None = None) -> dict:
+    _require_manage(actor, user_id)
+    if actor is not None and papel is not None and papel not in assignable_roles(actor):
+        raise AuthError("Só o administrador máximo define administradores.")
     with _db() as db:
         current = db.execute("SELECT * FROM usuarios WHERE id = ?", (user_id,)).fetchone()
         if current is None:
             raise AuthError("Login não encontrado.")
-        losing_admin = current["papel"] == "admin" and (
-            (papel is not None and papel != "admin") or ativo is False
+        losing_master = current["papel"] == "master" and (
+            (papel is not None and papel != "master") or ativo is False
         )
-        if losing_admin and _active_admins(db, excluding=user_id) == 0:
-            raise AuthError("É preciso manter pelo menos um administrador ativo.")
+        if losing_master and _active_masters(db, excluding=user_id) == 0:
+            raise AuthError("É preciso manter pelo menos um administrador máximo ativo.")
         if papel is not None and papel not in ROLES:
             raise AuthError("Perfil inválido.")
         fields: dict[str, object] = {}
@@ -268,7 +299,9 @@ def update_user(user_id: int, *, nome: str | None = None, papel: str | None = No
     return get_user(user_id)  # type: ignore[return-value]
 
 
-def set_password(user_id: int, password: str, must_change: bool = False) -> None:
+def set_password(user_id: int, password: str, must_change: bool = False,
+                 actor: dict | None = None) -> None:
+    _require_manage(actor, user_id)
     _check_password_rules(password)
     with _db() as db:
         db.execute(
@@ -287,13 +320,14 @@ def change_own_password(user_id: int, current: str, new: str) -> None:
     set_password(user_id, new)
 
 
-def delete_user(user_id: int) -> None:
+def delete_user(user_id: int, actor: dict | None = None) -> None:
+    _require_manage(actor, user_id)
     with _db() as db:
         current = db.execute("SELECT papel FROM usuarios WHERE id = ?", (user_id,)).fetchone()
         if current is None:
             return
-        if current["papel"] == "admin" and _active_admins(db, excluding=user_id) == 0:
-            raise AuthError("É preciso manter pelo menos um administrador ativo.")
+        if current["papel"] == "master" and _active_masters(db, excluding=user_id) == 0:
+            raise AuthError("É preciso manter pelo menos um administrador máximo ativo.")
         db.execute("DELETE FROM sessoes WHERE usuario_id = ?", (user_id,))
         db.execute("DELETE FROM usuarios WHERE id = ?", (user_id,))
 

@@ -79,7 +79,7 @@ def _first_admin_form() -> None:
                     st.error("As senhas não conferem.", icon=":material/error:")
                     return
                 try:
-                    user = auth.create_user(email, nome, senha, papel="admin")
+                    user = auth.create_user(email, nome, senha, papel="master")
                 except auth.AuthError as error:
                     st.error(str(error), icon=":material/error:")
                     return
@@ -190,12 +190,12 @@ def login_gate() -> dict:
 # --------------------------------------------------------------------------- pages
 
 def _permission_labels(user: dict) -> str:
-    if user["papel"] == "admin":
+    if user["papel"] in auth.ADMIN_ROLES:
         return "Todas"
     return ", ".join(auth.PERMISSIONS[item] for item in user["permissoes"] if item in auth.PERMISSIONS) or "—"
 
 
-def _create_user_form() -> None:
+def _create_user_form(me: dict) -> None:
     with st.container(border=True, key="lmr-card-create-user"):
         st.subheader("Criar login", icon=":material/person_add:")
         with st.form("create_user", clear_on_submit=True, border=False):
@@ -205,7 +205,7 @@ def _create_user_form() -> None:
             col_c, col_d = st.columns(2)
             senha = col_c.text_input("Senha provisória", type="password", autocomplete="new-password",
                                      help=f"Mínimo de {auth.MIN_PASSWORD} caracteres. Passe para a pessoa.")
-            papel = col_d.segmented_control("Perfil", list(auth.ROLES), format_func=auth.ROLES.get,
+            papel = col_d.segmented_control("Perfil", auth.assignable_roles(me), format_func=auth.ROLES.get,
                                             default="operador")
             permissoes = st.pills("Permissões (o administrador tem todas)", list(auth.PERMISSIONS),
                                   format_func=auth.PERMISSIONS.get, selection_mode="multi",
@@ -213,7 +213,7 @@ def _create_user_form() -> None:
             trocar = st.checkbox("Pedir para trocar a senha no primeiro acesso", value=True)
             if st.form_submit_button("Criar login", type="primary", icon=":material/person_add:"):
                 try:
-                    created = auth.create_user(email, nome, senha, papel or "operador", permissoes, trocar)
+                    created = auth.create_user(email, nome, senha, papel or "operador", permissoes, trocar, actor=me)
                 except auth.AuthError as error:
                     st.error(str(error), icon=":material/error:")
                 else:
@@ -223,39 +223,41 @@ def _create_user_form() -> None:
 def _edit_user(me: dict, users: list[dict]) -> None:
     with st.container(border=True, key="lmr-card-edit-user"):
         st.subheader("Editar login", icon=":material/manage_accounts:")
-        selected = st.selectbox("Login", users, format_func=lambda item: f"{item['nome']} · {item['email']}",
-                                key="edit_user_pick")
+        manageable = [user for user in users if auth.can_manage(me, user)]
+        if not manageable:
+            st.caption(":material/info: Nenhum login que você possa editar. Administradores só são "
+                       "alterados pelo administrador máximo.")
+            return
+        selected = st.selectbox("Login", manageable, key="edit_user_pick",
+                                format_func=lambda item: f"{item['nome']} · {item['email']} · "
+                                                         f"{auth.ROLES.get(item['papel'], '')}")
         if not selected:
             return
-        is_me = selected["id"] == me["id"]
+        roles = auth.assignable_roles(me)
         with st.form(f"edit_user_{selected['id']}", border=False):
-            col_a, col_b, col_c = st.columns([2, 1.4, 1], vertical_alignment="bottom")
+            col_a, col_b = st.columns([1.4, 2], vertical_alignment="bottom")
             nome = col_a.text_input("Nome", value=selected["nome"])
-            papel = col_b.segmented_control("Perfil", list(auth.ROLES), format_func=auth.ROLES.get,
-                                            default=selected["papel"], disabled=is_me)
-            ativo = col_c.toggle("Ativo", value=selected["ativo"], disabled=is_me)
-            permissoes = st.pills("Permissões (o administrador tem todas)", list(auth.PERMISSIONS),
+            papel = col_b.segmented_control("Perfil", roles, format_func=auth.ROLES.get,
+                                            default=selected["papel"] if selected["papel"] in roles else None)
+            ativo = st.toggle("Ativo (desligado = não consegue entrar)", value=selected["ativo"])
+            permissoes = st.pills("Permissões (administradores têm todas)", list(auth.PERMISSIONS),
                                   format_func=auth.PERMISSIONS.get, selection_mode="multi",
                                   default=selected["permissoes"])
             if st.form_submit_button("Salvar alterações", type="primary", icon=":material/save:"):
                 try:
-                    auth.update_user(selected["id"], nome=nome, papel=None if is_me else (papel or selected["papel"]),
-                                     permissoes=permissoes, ativo=None if is_me else ativo)
+                    auth.update_user(selected["id"], nome=nome, papel=papel or selected["papel"],
+                                     permissoes=permissoes, ativo=ativo, actor=me)
                 except auth.AuthError as error:
                     st.error(str(error), icon=":material/error:")
                 else:
                     st.success("Login atualizado.", icon=":material/check_circle:")
                     st.rerun()
-        if is_me:
-            st.caption(":material/info: Seu próprio perfil e status não podem ser mudados aqui. "
-                       "Troque sua senha em **Minha conta**.")
-            return
         with st.expander("Redefinir senha ou excluir", icon=":material/lock_reset:"):
             with st.form(f"reset_{selected['id']}", clear_on_submit=True, border=False):
                 nova = st.text_input("Nova senha provisória", type="password", autocomplete="new-password")
                 if st.form_submit_button("Redefinir senha", icon=":material/lock_reset:"):
                     try:
-                        auth.set_password(selected["id"], nova, must_change=True)
+                        auth.set_password(selected["id"], nova, must_change=True, actor=me)
                     except auth.AuthError as error:
                         st.error(str(error), icon=":material/error:")
                     else:
@@ -265,11 +267,12 @@ def _edit_user(me: dict, users: list[dict]) -> None:
             if st.button("Excluir login", disabled=not confirm, icon=":material/delete:",
                          key=f"del_{selected['id']}"):
                 try:
-                    auth.delete_user(selected["id"])
+                    auth.delete_user(selected["id"], actor=me)
                 except auth.AuthError as error:
                     st.error(str(error), icon=":material/error:")
                 else:
                     st.rerun()
+        st.caption(":material/info: Sua própria senha fica em **Minha conta**.")
 
 
 def page_users() -> None:
@@ -290,7 +293,7 @@ def page_users() -> None:
     st.dataframe(table, hide_index=True, alt="Logins cadastrados")
     left, right = st.columns(2, gap="large")
     with left:
-        _create_user_form()
+        _create_user_form(me)
     with right:
         _edit_user(me, users)
 
