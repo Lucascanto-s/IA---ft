@@ -573,18 +573,24 @@ def _clean_product(source: str) -> Image.Image:
     return trim_white_borders(cutout)
 
 
-def cutout_is_broken(cutout: Image.Image, max_holes: float = 0.08) -> bool:
-    """True when background removal left holes inside the part (e.g. a label photographed up close).
+def cutout_is_broken(cutout: Image.Image, max_holes: float = 0.08, max_fragments: int = 120) -> bool:
+    """True when background removal ate pieces of the subject (e.g. a label photographed up close).
 
-    A good cutout is a solid shape (~0% holes); a broken one had pieces of the subject taken as background.
+    A few large holes are real openings of the part (a window regulator, a bracket) and are fine.
+    A broken cutout instead has the subject eaten into many small scattered holes ("swiss cheese").
     """
-    from scipy.ndimage import binary_fill_holes
+    from scipy.ndimage import binary_fill_holes, label
 
     solid = np.array(cutout.getchannel("A")) > 128
     if solid.sum() < solid.size * 0.02:
-        return True
+        return True  # almost nothing left: the subject was removed
     filled = binary_fill_holes(solid)
-    return bool((filled.sum() - solid.sum()) / filled.sum() > max_holes)
+    holes = filled & ~solid
+    if holes.sum() / filled.sum() <= max_holes:
+        return False  # solid shape, good cutout
+    # Significant holes: real openings are few and large; an eaten subject leaves many small ones.
+    _, fragments = label(holes)
+    return bool(fragments > max_fragments)
 
 
 def product_image(source: str, enhance: bool = True) -> Image.Image:
