@@ -201,6 +201,31 @@ def extract_vehicle_from_cover(image: Image.Image, allow_multiple: bool = False)
     Returns None when the image does not look like such a cover. With allow_multiple, a strip
     holding several cars side by side is returned whole.
     """
+    found = _cover_vehicle_strip(image, allow_multiple)
+    return found[0] if found else None
+
+
+def extract_part_from_cover(image: Image.Image) -> Image.Image | None:
+    """Part below the car(s) when a product photo is actually an old cover (car on top, part below).
+
+    Returns the part cropped from the original image, or None when the photo is not such a cover.
+    """
+    found = _cover_vehicle_strip(image, allow_multiple=True)
+    if not found:
+        return None
+    _, strip_bottom = found
+    rgba = image.convert("RGBA")
+    cut = min(rgba.height - 1, round(strip_bottom * rgba.height / CANVAS_SIZE[1]))
+    below = rgba.crop((0, cut, rgba.width, rgba.height))
+    bbox = content_bbox(below.convert("RGB"), threshold=12)
+    # Something substantial must be left below the car, otherwise it is not a car + part cover.
+    if not bbox or (bbox[2] - bbox[0]) < rgba.width * 0.08 or (bbox[3] - bbox[1]) < rgba.height * 0.08:
+        return None
+    return below.crop(bbox)
+
+
+def _cover_vehicle_strip(image: Image.Image, allow_multiple: bool) -> tuple[Image.Image, int] | None:
+    """(vehicle strip, bottom row of the strip on the 1200 canvas) of a car-on-top cover, or None."""
     rgb = image.convert("RGB")
     if rgb.size != CANVAS_SIZE:
         rgb = rgb.resize(CANVAS_SIZE)
@@ -218,7 +243,7 @@ def extract_vehicle_from_cover(image: Image.Image, allow_multiple: bool = False)
         counts = (pixels.min(axis=2) < 245).sum(axis=1)
         low, high = int(height * 0.25), int(height * 0.45)
         bottom = low + int(np.argmin(counts[low:high]))
-        if counts[bottom] > width * 0.04:
+        if counts[bottom] > width * 0.04 or bottom - top < 90:
             return None
     elif len(bands) < 2:
         return None  # a single strip on top is a plain photo, not a cover with a part below
@@ -232,7 +257,7 @@ def extract_vehicle_from_cover(image: Image.Image, allow_multiple: bool = False)
     max_ratio = 8.0 if allow_multiple else 2.7
     if vehicle.width < 250 or vehicle.height < 90 or not 1.3 <= ratio <= max_ratio:
         return None
-    return vehicle.convert("RGBA")
+    return vehicle.convert("RGBA"), min(height, bottom + 4)
 
 
 def create_composite_cover(image: Image.Image) -> Image.Image:
@@ -534,6 +559,12 @@ def _clean_product(source: str) -> Image.Image:
     if image.getchannel("A").getextrema()[0] < 255:
         return trim_white_borders(image)
     if has_white_background(image):
+        # Some listings reuse an old cover (car on top, part below) as a part photo: keep only the part.
+        part = extract_part_from_cover(image)
+        if part is not None:
+            cleaned = trim_white_borders(whiten_background(part))
+            cleaned.info["from_cover"] = True
+            return cleaned
         return trim_white_borders(whiten_background(image))
     return trim_white_borders(remove_background(image))
 

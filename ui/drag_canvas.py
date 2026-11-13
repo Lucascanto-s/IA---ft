@@ -1,6 +1,6 @@
 """Canvas where the part (and the cars) can be grabbed with the mouse and moved.
 
-Drag a layer to move it, use the mouse wheel over it to zoom. Arrow keys move the
+Drag a layer to move it, Ctrl + mouse wheel over it to zoom (a plain wheel scrolls the page). Arrow keys move the
 selected layer (Shift = 20px) and +/- zoom, for keyboard users.
 """
 import base64
@@ -16,14 +16,20 @@ _HTML = """
 <div class="stage" role="application" aria-label="Arraste a peça ou o carro com o mouse">
   <div class="guide guide-v"></div>
   <div class="guide guide-h"></div>
+  <div class="tip">Segure <b>Ctrl</b> + roda do mouse para dar zoom</div>
 </div>
-<p class="hint">Clique e arraste para mover · roda do mouse para zoom · setas para ajuste fino</p>
+<p class="hint">Clique e arraste para mover · <b>Ctrl + roda do mouse</b> para zoom · setas para ajuste fino</p>
 """
 
 _CSS = """
 .stage {
   position: relative;
-  width: 100%;
+  /* Fit the visible window: the smaller of the column width and the viewport height. */
+  width: min(100%, calc(100vh - 220px));
+  width: min(100%, calc(100dvh - 220px));
+  min-width: 280px;
+  max-width: 820px; /* never giant on wide screens or with browser zoom out */
+  margin: 0 auto;
   aspect-ratio: 1 / 1;
   background: #ffffff;
   border: 4px solid #000000;
@@ -54,6 +60,22 @@ _CSS = """
 .stage.dragging .guide { display: block; }
 .guide-v { left: 50%; top: 0; bottom: 0; width: 1px; }
 .guide-h { top: 50%; left: 0; right: 0; height: 1px; }
+.tip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #ffffff;
+  font-size: 0.95rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 60;
+}
+.tip.show { opacity: 1; }
 .hint {
   margin: 6px 0 0;
   font-size: 0.8rem;
@@ -106,6 +128,14 @@ export default function (component) {
     inst.timer = setTimeout(emit, 350)
   }
 
+  const tip = stage.querySelector(".tip")
+  const showTip = () => {
+    if (!tip) return
+    tip.classList.add("show")
+    clearTimeout(inst.tipTimer)
+    inst.tipTimer = setTimeout(() => tip.classList.remove("show"), 1400)
+  }
+
   const select = (id) => {
     for (const [otherId, img] of Object.entries(inst.imgs)) {
       img.classList.toggle("active", otherId === id)
@@ -130,7 +160,7 @@ export default function (component) {
       img.dataset.src = spec.src
     }
     img.alt = spec.label
-    img.title = spec.label + " · arraste para mover, roda do mouse para zoom"
+    img.title = spec.label + " · arraste para mover, Ctrl + roda do mouse para zoom"
     img.style.zIndex = String(spec.z)
     img.classList.toggle("shadow", !!spec.shadow)
     // Python is the source of truth, except for the layer being dragged right now.
@@ -169,6 +199,11 @@ export default function (component) {
       }
     }
     img.onwheel = (event) => {
+      // Zoom only with Ctrl (or Cmd) held: a plain wheel keeps scrolling the page.
+      if (!event.ctrlKey && !event.metaKey) {
+        showTip()
+        return
+      }
       event.preventDefault()
       select(id)
       const step = event.deltaY < 0 ? 5 : -5
@@ -203,6 +238,7 @@ export default function (component) {
 
   return () => {
     clearTimeout(inst.timer)
+    clearTimeout(inst.tipTimer)
     INSTANCES.delete(parentElement)
   }
 }

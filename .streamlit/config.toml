@@ -1,10 +1,19 @@
 [theme]
 base = "light"
 primaryColor = "#0e7490"
+linkColor = "#0e7490"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f1f5f9"
 textColor = "#0f172a"
+borderColor = "#e2e8f0"
+showWidgetBorder = true
+baseRadius = "0.6rem"
 font = "sans serif"
+paddingTop = "2.5rem"
+
+[theme.sidebar]
+backgroundColor = "#f8fafc"
+secondaryBackgroundColor = "#ffffff"
 
 [server]
 maxUploadSize = 15
