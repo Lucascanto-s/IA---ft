@@ -16,6 +16,12 @@ class BaseLinkerError(RuntimeError):
     pass
 
 
+def sku_number(sku: str) -> int | None:
+    """Número do SKU para comparar faixas (ex.: '00009000' -> 9000). None se não for numérico."""
+    text = str(sku).strip()
+    return int(text) if text.isdigit() else None
+
+
 class BaseLinkerClient:
     def __init__(self, token: str, inventory_id: str, api_url: str) -> None:
         self.token = token
@@ -125,25 +131,42 @@ class BaseLinkerClient:
             parameters["star"] = int(star)
         self.call("addInventoryProduct", parameters)
 
-    def list_product_ids(self) -> list[str]:
-        """Every product ID of the inventory (the list method pages by 1000)."""
-        ids: list[str] = []
+    def list_products(self) -> list[tuple[str, str]]:
+        """(product ID, SKU) of the whole inventory. The list method is cheap and already
+        returns the SKU, so a SKU range can be applied before reading the heavy product data."""
+        items: list[tuple[str, str]] = []
         page = 1
         while True:
             batch = self.call("getInventoryProductsList", {"inventory_id": self.inventory_id, "page": page})
             products = batch.get("products", {}) or {}
-            ids.extend(str(product_id) for product_id in products)
+            for product_id, info in products.items():
+                sku = str((info or {}).get("sku") or "").strip() if isinstance(info, dict) else ""
+                items.append((str(product_id), sku))
             if len(products) < 1000:
-                return ids
+                return items
             page += 1
 
-    def find_starred(self, star: int, progress=None) -> list[dict[str, str]]:
+    def list_product_ids(self) -> list[str]:
+        """Every product ID of the inventory."""
+        return [product_id for product_id, _ in self.list_products()]
+
+    def find_starred(self, star: int, progress=None, sku_from: int | None = None,
+                     sku_to: int | None = None) -> list[dict[str, str]]:
         """SKU, name and ID of every product with this star type.
 
-        The API cannot filter by star, so the whole inventory is read in blocks of 1000.
+        The API cannot filter by star, so the inventory is read in blocks of 1000.
+        sku_from / sku_to limit the reading to products whose numeric SKU is in that range.
         `progress(fraction, message)` is called after each block.
         """
-        ids = self.list_product_ids()
+        products = self.list_products()
+        if sku_from is not None or sku_to is not None:
+            low = sku_from if sku_from is not None else 0
+            high = sku_to if sku_to is not None else float("inf")
+            products = [
+                (product_id, sku) for product_id, sku in products
+                if (number := sku_number(sku)) is not None and low <= number <= high
+            ]
+        ids = [product_id for product_id, _ in products]
         found: list[dict[str, str]] = []
         blocks = range(0, len(ids), 1000)
         for done, start in enumerate(blocks, start=1):

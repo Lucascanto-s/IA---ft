@@ -320,16 +320,24 @@ def product_editor_layer(image: Image.Image) -> dict:
     }
 
 
+def rotate_content(image: Image.Image, angle: int) -> Image.Image:
+    """Rotate the part by `angle` degrees (clockwise), growing the canvas so nothing is clipped."""
+    if int(angle) % 360 == 0:
+        return image
+    return image.convert("RGBA").rotate(-int(angle), expand=True, resample=Image.Resampling.BICUBIC)
+
+
 def reposition_image(
     image: Image.Image,
     x_offset: int = 0,
     y_offset: int = 0,
     scale: int = 100,
+    angle: int = 0,
     *,
     resampling: Image.Resampling = Image.Resampling.LANCZOS,
 ) -> Image.Image:
     """Recompose a generated image on the white canvas using manual adjustments."""
-    content = _content_layer(image)
+    content = rotate_content(_content_layer(image), angle)
     width = max(1, round(content.width * scale / 100))
     height = max(1, round(content.height * scale / 100))
     content = content.resize((width, height), resampling)
@@ -514,16 +522,19 @@ def validate_output(path: Path | Image.Image, tolerance: int = 24) -> dict[str, 
 PRODUCT_MIN_SIDE = 1400
 DEFAULT_CONTRAST = 1.08
 DEFAULT_SHARPNESS = 1.0
+DEFAULT_BRIGHTNESS = 1.0
 
 
 def enhance_product(
-    image: Image.Image, contrast: float = DEFAULT_CONTRAST, sharpness: float = DEFAULT_SHARPNESS
+    image: Image.Image, contrast: float = DEFAULT_CONTRAST, sharpness: float = DEFAULT_SHARPNESS,
+    brightness: float = DEFAULT_BRIGHTNESS,
 ) -> Image.Image:
     """Make the part photo crisper without touching the white background.
 
     Upscales small photos before they are fitted on the 1200px canvas (so the final resize
     shrinks instead of blurring), adds a little contrast/colour and sharpens edges and texture.
     contrast: 1.0 = unchanged. sharpness: 0 = no extra sharpening, 1 = default, 2 = double.
+    brightness: 1.0 = unchanged, <1 darker, >1 lighter (only the part, not the white background).
     """
     image = image.convert("RGBA")
     longest = max(image.size)
@@ -538,6 +549,8 @@ def enhance_product(
     if sharpness > 0:
         # Smooth JPEG blocks/noise first so sharpening does not turn them into speckles.
         rgb = rgb.filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.5))
+    if brightness != 1:
+        rgb = ImageEnhance.Brightness(rgb).enhance(brightness)
     if contrast != 1:
         rgb = ImageEnhance.Contrast(rgb).enhance(contrast)
     rgb = ImageEnhance.Color(rgb).enhance(1.05)

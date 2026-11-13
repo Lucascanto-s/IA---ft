@@ -11,9 +11,12 @@ import pandas as pd
 from dotenv import load_dotenv
 from PIL import Image, ImageOps
 
+import auth
+import auth_ui
 from baselinker import BaseLinkerClient, BaseLinkerError, extract_image_urls
 from cover_import import find_related_covers, parse_name
 from image_processor import (
+    CANVAS_SIZE,
     compose_cover,
     compose_vehicle_group,
     cover_product_index,
@@ -28,16 +31,21 @@ from image_processor import (
     product_image,
     public_urls,
     reposition_image,
+    rotate_content,
     sharpen,
     validate_output,
 )
 from project_utils import normalized_tokens, sanitize_sku
+from text_badge import render_text_badge
 from ui.drag_canvas import drag_canvas, image_data_url
 from ui.theme import ICON, STEPS, apply_theme, loading, page_header
 from vehicle_search import VehicleSearchError, find_vehicle_images
 
 
 load_dotenv()
+# Settings saved in the app (encrypted, dados/) override .env.
+auth.init_db()
+auth.apply_settings_to_env()
 PROJECT_DIR = Path(__file__).resolve().parent
 FILES_DIR = PROJECT_DIR / "arquivos"
 VEHICLE_MAP_FILE = Path(os.getenv("VEHICLE_MAP_FILE", FILES_DIR / "mapa" / "vehicle_map.csv"))
@@ -341,20 +349,24 @@ def save_vehicle_image(brand: str, model: str, years: str, image: Image.Image) -
 
 DEFAULT_CONTRAST_PCT = 108
 DEFAULT_SHARPNESS_PCT = 100
+DEFAULT_BRIGHTNESS_PCT = 100
 
 
 def _reset_part_treatment() -> None:
     st.session_state["part_contrast"] = DEFAULT_CONTRAST_PCT
     st.session_state["part_sharpness"] = DEFAULT_SHARPNESS_PCT
+    st.session_state["part_brightness"] = DEFAULT_BRIGHTNESS_PCT
 
 
-def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int) -> None:
-    """Re-treat the part (cover layer and images 2-4) when contrast/sharpness change."""
+def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int,
+                          brightness_pct: int = DEFAULT_BRIGHTNESS_PCT) -> None:
+    """Re-treat the part (cover layer and images 2-4) when contrast/sharpness/brightness change."""
     raw = result.get("product_raw")
-    settings = (contrast_pct, sharpness_pct)
+    settings = (contrast_pct, sharpness_pct, brightness_pct)
     if not raw or result.get("treatment") == settings:
         return
-    params = {"contrast": contrast_pct / 100, "sharpness": sharpness_pct / 100}
+    params = {"contrast": contrast_pct / 100, "sharpness": sharpness_pct / 100,
+              "brightness": brightness_pct / 100}
     # Same photo in several positions is treated once; distinct photos in parallel.
     unique = {id(image): image for image in raw.values()}
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -368,13 +380,30 @@ def _apply_part_treatment(result: dict, contrast_pct: int, sharpness_pct: int) -
     result.pop("drag_assets", None)
 
 
+def _set_cover_photo(result: dict, photo_number: int) -> None:
+    """Use another product photo as the part on the cover (image 1)."""
+    urls = list((result.get("product_images") or [])[:4])
+    if not urls:
+        return
+    padded = (urls + [urls[-1]] * 4)[:4]
+    index = max(1, min(int(photo_number), len(padded)))
+    raw = result.get("product_raw") or {}
+    raw[1] = product_image(padded[index - 1], enhance=False)
+    result["product_raw"] = raw
+    if result.get("cover_layers"):
+        result["cover_layers"]["product"] = raw[1]  # placeholder until re-treated below
+    result["cover_photo"] = index
+    result["treatment"] = None  # force contrast/brightness/sharpness to be re-applied
+    result.pop("drag_assets", None)  # re-encode the cover part for the canvas
+
+
 def _reset_editor_state() -> None:
     for key in ("cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
-                "cover_product_x", "cover_product_y", "cover_product_scale",
-                "part_contrast", "part_sharpness"):
+                "cover_product_x", "cover_product_y", "cover_product_scale", "cover_product_rot",
+                "part_contrast", "part_sharpness", "part_brightness"):
         st.session_state.pop(key, None)
     for index in range(2, 5):
-        for suffix in ("x", "y", "scale"):
+        for suffix in ("x", "y", "scale", "rot"):
             st.session_state.pop(f"image_{index}_{suffix}", None)
 
 
@@ -548,6 +577,7 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         "batch_total": pending["batch_total"],
         "published": False,
         "product_images": image_urls,
+        "cover_photo": cover_index + 1,
         "paths": generated.paths,
         "warnings": generated.warnings,
         "cover_layers": cover_layers,
@@ -565,7 +595,8 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
         "backup_path": None,
         "product_raw": product_raw,
     }
-    _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT)
+    _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT,
+                          DEFAULT_BRIGHTNESS_PCT)
     _reset_editor_state()
     st.session_state["result"]["review"] = pending
     st.session_state["result"]["review_signature"] = _review_signature(approved_choices)
@@ -573,10 +604,20 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
     st.session_state.pop("pending_vehicle_review", None)
 
 
+def _part_rotation(prefix: str) -> int:
+    return int(st.session_state.get(f"{prefix}_rot", 0))
+
+
+def _part_rotations(result: dict) -> tuple[int, ...]:
+    prefixes = (["cover_product"] if result.get("cover_layers") else []) + [f"image_{i}" for i in range(2, 5)]
+    return tuple(_part_rotation(prefix) for prefix in prefixes)
+
+
 def _drag_assets(result: dict) -> dict:
-    """Browser copies of each layer, encoded once per generated SKU."""
+    """Browser copies of each layer, encoded once per generated SKU (re-encoded when a part rotates)."""
+    rotations = _part_rotations(result)
     assets = result.get("drag_assets")
-    if assets:
+    if assets and result.get("drag_assets_rot") == rotations:
         return assets
     assets = {}
     to_encode: dict[str, Image.Image] = {}
@@ -584,16 +625,18 @@ def _drag_assets(result: dict) -> dict:
     if layers:
         previous = result.get("drag_vehicle_asset")
         if previous and previous[0] is layers["vehicle"]:
-            assets["vehicle"] = previous[1]  # the cars do not change with the part treatment
+            assets["vehicle"] = previous[1]  # the cars do not change with the part treatment/rotation
         else:
             to_encode["vehicle"] = ImageOps.contain(layers["vehicle"], (1060, 390))
-        to_encode["product"] = layers["product"]
+        product = rotate_content(layers["product"], _part_rotation("cover_product"))
+        to_encode["product"] = product
         assets["vehicle_size"] = layers["vehicle"].size
-        assets["product_size"] = layers["product"].size
+        assets["product_size"] = product.size
     for index in range(2, 5):
         source = result["editor_sources"][index]
         bbox = content_bbox(source)
         content = source.crop(bbox) if bbox else source
+        content = rotate_content(content, _part_rotation(f"image_{index}"))
         to_encode[f"image_{index}"] = content
         assets[f"image_{index}_size"] = content.size
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -601,15 +644,49 @@ def _drag_assets(result: dict) -> dict:
     if layers:
         result["drag_vehicle_asset"] = (layers["vehicle"], assets["vehicle"])
     result["drag_assets"] = assets
+    result["drag_assets_rot"] = rotations
     return assets
 
 
-def _current_previews(result: dict, final: bool = False) -> list[Image.Image]:
+def _text_badge_for(index: int) -> Image.Image | None:
+    """Rendered text box for image 2-4, or None when it is off/empty. Cached by the typed text."""
+    if not st.session_state.get(f"text_{index}_on"):
+        return None
+    text = str(st.session_state.get(f"text_{index}_value", "")).strip()
+    if not text:
+        return None
+    return render_text_badge(text, st.session_state.get(f"text_{index}_color", "#000000"))
+
+
+def _badge_base(size: tuple[int, int], max_w: int = 820) -> tuple[int, int]:
+    """Badge size in canvas pixels at zoom 100 (keeps aspect; the drawing has more resolution)."""
+    width, height = size
+    if width <= max_w:
+        return width, height
+    return max_w, max(1, round(height * max_w / width))
+
+
+def _paste_badge(base: Image.Image, badge: Image.Image, index: int,
+                 resampling: Image.Resampling) -> Image.Image:
+    base_w, base_h = _badge_base(badge.size)
+    scale = int(st.session_state.get(f"text_{index}_scale", 100))
+    width = max(1, round(base_w * scale / 100))
+    height = max(1, round(base_h * scale / 100))
+    fitted = badge.resize((width, height), resampling)
+    x = (CANVAS_SIZE[0] - width) // 2 + int(st.session_state.get(f"text_{index}_x", 0))
+    y = (CANVAS_SIZE[1] - height) // 2 + int(st.session_state.get(f"text_{index}_y", TEXT_DEFAULT_Y))
+    canvas = base.convert("RGBA")
+    canvas.alpha_composite(fitted, (x, y))
+    return canvas.convert("RGB")
+
+
+def _current_previews(result: dict, final: bool = False, with_text: bool = True) -> list[Image.Image]:
     """Fast bilinear render for the screen; final=True uses Lanczos for the published files."""
     resampling = Image.Resampling.LANCZOS if final else Image.Resampling.BILINEAR
     if result.get("cover_layers"):
         cover = compose_cover(
-            result["cover_layers"]["vehicle"], result["cover_layers"]["product"],
+            result["cover_layers"]["vehicle"],
+            rotate_content(result["cover_layers"]["product"], _part_rotation("cover_product")),
             st.session_state.get("cover_vehicle_x", 0), st.session_state.get("cover_vehicle_y", 0),
             st.session_state.get("cover_vehicle_scale", 100), st.session_state.get("cover_product_x", 0),
             st.session_state.get("cover_product_y", 0), st.session_state.get("cover_product_scale", 100),
@@ -619,13 +696,18 @@ def _current_previews(result: dict, final: bool = False) -> list[Image.Image]:
         cover = result["editor_sources"][1]
     previews = [cover]
     for index in range(2, 5):
-        previews.append(reposition_image(
+        image = reposition_image(
             result["editor_sources"][index],
             st.session_state.get(f"image_{index}_x", 0),
             st.session_state.get(f"image_{index}_y", 0),
             st.session_state.get(f"image_{index}_scale", 100),
+            _part_rotation(f"image_{index}"),
             resampling=resampling,
-        ))
+        )
+        badge = _text_badge_for(index) if with_text else None
+        if badge is not None:
+            image = _paste_badge(image, badge, index, resampling)
+        previews.append(image)
     return previews
 
 
@@ -872,7 +954,8 @@ def _render_publish_all(batch: dict, entries: list[dict]) -> None:
         )
         confirm = st.checkbox("Conferi as capas abaixo e quero publicar todos os editados.",
                               key="confirm_publish_all")
-        if not st.button(f"Publicar todos os editados ({len(ready)})", type="primary", disabled=not confirm,
+        if not st.button(f"Publicar todos os editados ({len(ready)})", type="primary",
+                         disabled=not confirm or not auth_ui.can("publicar"),
                          icon=":material/publish:", key="publish_all"):
             return
         base_url = os.getenv("PUBLIC_IMAGE_BASE_URL", "").strip()
@@ -1257,15 +1340,52 @@ POSITION_SLIDERS = {
     "image_2": {"x": (-400, 400), "y": (-400, 400)},
     "image_3": {"x": (-400, 400), "y": (-400, 400)},
     "image_4": {"x": (-400, 400), "y": (-400, 400)},
+    "text_2": {"x": (-560, 560), "y": (-560, 560)},
+    "text_3": {"x": (-560, 560), "y": (-560, 560)},
+    "text_4": {"x": (-560, 560), "y": (-560, 560)},
 }
+TEXT_PREFIXES = ("text_2", "text_3", "text_4")
+TEXT_SCALE_RANGE = (30, 300)
+TEXT_DEFAULT_Y = 430  # a caixa comeca perto do rodape da foto
 
 
-def _position_sliders(prefix: str) -> None:
+def _render_text_controls(index: int, active: bool) -> None:
+    """Botão de texto, campo (CAIXA ALTA) e barras de lado/altura/tamanho das imagens 2 a 4."""
+    with st.container(border=True, key=f"lmr-card-text-{index}"):
+        head, field = st.columns([1.1, 3], vertical_alignment="bottom")
+        head.markdown("**:material/text_fields: Texto na foto**")
+        on = field.toggle("Adicionar texto", key=f"text_{index}_on")
+        if not on:
+            return
+        texto_col, cor_col = st.columns([4, 1], vertical_alignment="bottom")
+        texto_col.text_input("Texto (aparece em CAIXA ALTA)", key=f"text_{index}_value", max_chars=42,
+                             placeholder="Ex.: COMPRESSOR GM ORIGINAL")
+        cor_col.color_picker("Cor da letra", key=f"text_{index}_color")
+        if not active:
+            st.caption(":material/edit: Digite o texto acima para a caixa aparecer na foto.")
+            return
+        st.caption(":material/open_with: Arraste a caixa na imagem · **Ctrl + roda do mouse** muda o tamanho · "
+                   "ou use as barras abaixo.")
+        ranges = POSITION_SLIDERS[f"text_{index}"]
+        lado, altura, tamanho = st.columns(3)
+        lado.slider("Lado", *ranges["x"], step=1, key=f"text_{index}_x", persist_state="page")
+        altura.slider("Altura", *ranges["y"], step=1, key=f"text_{index}_y", persist_state="page")
+        tamanho.slider("Tamanho", *TEXT_SCALE_RANGE, step=5, key=f"text_{index}_scale", persist_state="page",
+                       format="%d%%")
+
+
+def _position_sliders(prefix: str, scale_range: tuple[int, int] = (50, 150)) -> None:
     """Side / height / zoom bars. persist_state keeps the values while the bars are hidden."""
     ranges = POSITION_SLIDERS[prefix]
     st.slider("Lado", *ranges["x"], step=1, key=f"{prefix}_x", persist_state="page")
     st.slider("Altura", *ranges["y"], step=1, key=f"{prefix}_y", persist_state="page")
-    st.slider("Zoom", 50, 150, step=5, key=f"{prefix}_scale", persist_state="page", format="%d%%")
+    st.slider("Zoom", *scale_range, step=5, key=f"{prefix}_scale", persist_state="page", format="%d%%")
+
+
+def _part_controls(prefix: str, scale_range: tuple[int, int] = (50, 150)) -> None:
+    """Lado / altura / zoom + girar (como no Canva), para a peça da capa e das imagens 2 a 4."""
+    _position_sliders(prefix, scale_range)
+    st.slider("Girar", -180, 180, step=1, key=f"{prefix}_rot", persist_state="page", format="%d°")
 
 
 def _status_label() -> tuple[str, str, str]:
@@ -1339,20 +1459,40 @@ def _next_star_batch() -> list[str]:
     return [item["sku"] for item in (fresh or retry)[:_batch_size()]]
 
 
+def _sku_range_inputs() -> None:
+    """Faixa de SKU opcional: lê só os SKUs dentro dela (mais rápido)."""
+    active = st.session_state.get("star_sku_from") is not None or st.session_state.get("star_sku_to") is not None
+    with st.expander("Limitar faixa de SKU (opcional)", icon=":material/filter_alt:", expanded=active):
+        st.caption("Lê só os SKUs com número dentro da faixa — mais rápido. Deixe vazio para ler o inventário "
+                   "inteiro. Ex.: de 9000 até o fim do estoque.")
+        de_col, ate_col = st.columns(2)
+        de_col.number_input("De (SKU)", min_value=0, step=1, value=None, format="%d",
+                            key="star_sku_from", placeholder="ex.: 9000")
+        ate_col.number_input("Até (SKU)", min_value=0, step=1, value=None, format="%d",
+                             key="star_sku_to", placeholder="deixe vazio = até o fim")
+        de, ate = st.session_state.get("star_sku_from"), st.session_state.get("star_sku_to")
+        if de is not None and ate is not None and de > ate:
+            st.warning("O 'De' está maior que o 'Até'.", icon=":material/warning:")
+
+
 def _load_star_queue() -> None:
     if STAR_TODO is None:
-        st.error("Configure BASELINKER_STAR_TODO no arquivo .env.", icon=":material/error:")
+        st.error("Configure a estrela da fila em Configurações.", icon=":material/error:")
         return
+    sku_from = st.session_state.get("star_sku_from")
+    sku_to = st.session_state.get("star_sku_to")
     bar = st.progress(0.0, text="Lendo o inventário do BaseLinker...")
     try:
         items = client().find_starred(
-            STAR_TODO, lambda fraction, message: bar.progress(min(fraction, 1.0), text=message)
+            STAR_TODO, lambda fraction, message: bar.progress(min(fraction, 1.0), text=message),
+            sku_from=int(sku_from) if sku_from is not None else None,
+            sku_to=int(sku_to) if sku_to is not None else None,
         )
     except (BaseLinkerError, ValueError) as error:
         bar.empty()
         st.error(str(error), icon=":material/error:")
         return
-    st.session_state["star_queue"] = {"items": items}
+    st.session_state["star_queue"] = {"items": items, "sku_from": sku_from, "sku_to": sku_to}
     st.rerun()
 
 
@@ -1361,8 +1501,9 @@ def _render_star_picker() -> list[str]:
     queue = st.session_state.get("star_queue")
     if not queue:
         st.caption("Busca no BaseLinker os produtos com a :yellow[**estrela amarela**] (fazer imagem). Lê o "
-                   "inventário inteiro uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver "
+                   "inventário uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver "
                    "aberto. Ao publicar, a estrela vira :red[**vermelha**].")
+        _sku_range_inputs()
         if st.button(":yellow[:material/star:] Buscar SKUs com estrela amarela", key="load_star_queue",
                      width="stretch"):
             _load_star_queue()
@@ -1375,10 +1516,14 @@ def _render_star_picker() -> list[str]:
         st.badge(f"{len(fresh)} na fila", icon=":material/pending:", color="blue")
         if retry:
             st.badge(f"{len(retry)} abertos sem publicar", icon=":material/edit_note:", color="orange")
+        if queue.get("sku_from") is not None or queue.get("sku_to") is not None:
+            faixa = f"{queue.get('sku_from') or 'início'} a {queue.get('sku_to') or 'fim'}"
+            st.badge(f"Faixa {faixa}", icon=":material/filter_alt:", color="violet")
         st.space("stretch")
         if st.button("Atualizar", icon=":material/refresh:", key="reload_star_queue", type="tertiary",
                      help="Lê o BaseLinker de novo (inclui estrelas marcadas depois da última busca)."):
             _load_star_queue()
+    _sku_range_inputs()
     rows = fresh + retry
     if not rows:
         st.success("Todos os SKUs com estrela já foram publicados.", icon=":material/task_alt:")
@@ -1547,12 +1692,34 @@ def _render_editor_header(result: dict) -> None:
         st.warning(warning, icon=":material/warning:")
 
 
+def _render_cover_photo_buttons(result: dict) -> None:
+    """Botões para escolher qual foto do produto vira a peça da capa (ex.: usar a foto 4 na capa)."""
+    photos = min(4, len(result.get("product_images") or []))
+    if photos <= 1:
+        return
+    current = result.get("cover_photo", 1)
+    with st.container(border=True, key="lmr-card-cover-photo"):
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.markdown("**:material/build: Peça da capa:**")
+            for number in range(1, photos + 1):
+                if st.button(f"Foto {number}", key=f"cover_photo_{result['sku']}_{number}",
+                             type="primary" if number == current else "secondary",
+                             disabled=number == current,
+                             help="Usa esta foto do produto como a peça da capa."):
+                    _set_cover_photo(result, number)
+                    st.rerun()
+            st.caption("Trocar a peça da capa não muda as imagens 2 a 4.")
+
+
 def _render_toolbar(result: dict) -> None:
     with st.container(border=True, key="lmr-card-toolbar"):
-        contrast_col, sharpness_col, reset_col, fine_col = st.columns(
-            [3, 3, 1.6, 2.2], vertical_alignment="bottom", gap="medium"
+        brightness_col, contrast_col, sharpness_col, reset_col = st.columns(
+            [3, 3, 3, 2], vertical_alignment="bottom", gap="medium"
         )
         has_raw = bool(result.get("product_raw"))
+        with brightness_col:
+            st.slider("Brilho da peça", 60, 150, step=1, key="part_brightness", format="%d%%",
+                      disabled=not has_raw, help="100% = foto original. Abaixo escurece, acima clareia.")
         with contrast_col:
             st.slider("Contraste da peça", 80, 140, step=1, key="part_contrast", format="%d%%",
                       disabled=not has_raw, help="100% = foto original. Padrão: 108%.")
@@ -1561,10 +1728,7 @@ def _render_toolbar(result: dict) -> None:
                       disabled=not has_raw, help="0% = sem nitidez extra. Padrão: 100%.")
         with reset_col:
             st.button("Padrão", on_click=_reset_part_treatment, width="stretch", disabled=not has_raw,
-                      icon=":material/restart_alt:", help="Volta contraste e nitidez para o padrão.")
-        with fine_col:
-            st.toggle("Ajuste fino", key="fine_tune",
-                      help="Mostra as barras de lado, altura e zoom ao lado de cada imagem.")
+                      icon=":material/restart_alt:", help="Volta brilho, contraste e nitidez para o padrão.")
 
 
 def _framing_badge(report: dict, cover: bool = False) -> None:
@@ -1580,17 +1744,13 @@ def _framing_badge(report: dict, cover: bool = False) -> None:
         )
 
 
-def _image_tab(fine_tune: bool):
-    """Columns for one tab: canvas centred when the bars are hidden, canvas + bars otherwise."""
-    if fine_tune:
-        canvas_col, controls_col = st.columns([3, 2], gap="large")
-        return canvas_col, controls_col
-    _, canvas_col, _ = st.columns([1, 4, 1])
-    return canvas_col, None
+def _image_tab():
+    """Controls on the left (using the empty space), canvas on the right."""
+    controls_col, canvas_col = st.columns([2, 3], gap="large")
+    return canvas_col, controls_col
 
 
 def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
-    fine_tune = st.session_state.get("fine_tune", False)
     tabs = st.tabs([
         ":material/photo_library: Imagem 1 · Capa",
         ":material/image: Imagem 2",
@@ -1599,7 +1759,7 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
     ])
     with tabs[0]:
         if result.get("cover_layers"):
-            canvas_col, controls_col = _image_tab(fine_tune)
+            canvas_col, controls_col = _image_tab()
             with canvas_col:
                 vehicle_base, product_base = cover_base_sizes(
                     assets["vehicle_size"], assets["product_size"],
@@ -1616,14 +1776,14 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
                      "y_range": list(POSITION_SLIDERS["cover_product"]["y"]), "scale_range": [50, 150]},
                 ], {"vehicle": "cover_vehicle", "product": "cover_product"}, key="drag_cover")
                 _framing_badge(reports[0], cover=True)
-            if controls_col:
-                with controls_col:
-                    with st.container(border=True, key="lmr-card-vehicle-sliders"):
-                        st.markdown("**:material/directions_car: Veículos**")
-                        _position_sliders("cover_vehicle")
-                    with st.container(border=True, key="lmr-card-product-sliders"):
-                        st.markdown("**:material/build: Peça**")
-                        _position_sliders("cover_product")
+            with controls_col:
+                _render_cover_photo_buttons(result)
+                with st.container(border=True, key="lmr-card-product-sliders"):
+                    st.markdown("**:material/build: Peça da capa**")
+                    _part_controls("cover_product")
+                with st.container(border=True, key="lmr-card-vehicle-sliders"):
+                    st.markdown("**:material/directions_car: Veículos**")
+                    _position_sliders("cover_vehicle")
         else:
             _, canvas_col, _ = st.columns([1, 4, 1])
             with canvas_col:
@@ -1633,21 +1793,34 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
 
     for index, tab in enumerate(tabs[1:], start=2):
         with tab:
-            canvas_col, controls_col = _image_tab(fine_tune)
+            badge = _text_badge_for(index)
+            canvas_col, controls_col = _image_tab()
             with canvas_col:
                 content_size = assets[f"image_{index}_size"]
-                drag_canvas([
+                layers = [
                     {"id": "product", "label": f"Peça · imagem {index}", "src": assets[f"image_{index}"],
                      "base_w": content_size[0], "base_h": content_size[1], "top": None, "z": 1,
                      "shadow": False, "x_range": list(POSITION_SLIDERS[f"image_{index}"]["x"]),
                      "y_range": list(POSITION_SLIDERS[f"image_{index}"]["y"]), "scale_range": [50, 150]},
-                ], {"product": f"image_{index}"}, key=f"drag_image_{index}")
+                ]
+                prefixes = {"product": f"image_{index}"}
+                if badge is not None:
+                    base_w, base_h = _badge_base(badge.size)
+                    layers.append({
+                        "id": "text", "label": "Texto", "src": image_data_url(badge),
+                        "base_w": base_w, "base_h": base_h, "top": None, "z": 3, "shadow": False,
+                        "x_range": list(POSITION_SLIDERS[f"text_{index}"]["x"]),
+                        "y_range": list(POSITION_SLIDERS[f"text_{index}"]["y"]),
+                        "scale_range": list(TEXT_SCALE_RANGE),
+                    })
+                    prefixes["text"] = f"text_{index}"
+                drag_canvas(layers, prefixes, key=f"drag_image_{index}")
                 _framing_badge(reports[index - 1])
-            if controls_col:
-                with controls_col:
-                    with st.container(border=True, key=f"lmr-card-sliders-{index}"):
-                        st.markdown("**:material/build: Peça**")
-                        _position_sliders(f"image_{index}")
+            with controls_col:
+                with st.container(border=True, key=f"lmr-card-sliders-{index}"):
+                    st.markdown("**:material/build: Peça**")
+                    _part_controls(f"image_{index}")
+                _render_text_controls(index, badge is not None)
 
 
 def _render_publish(result: dict, previews: list[Image.Image], reports: list[dict]) -> None:
@@ -1666,19 +1839,23 @@ def _render_publish(result: dict, previews: list[Image.Image], reports: list[dic
             ":material/link: Envio por URLs públicas." if base_url
             else ":material/computer: Sem URL pública configurada: as imagens vão direto do computador (base64)."
         )
+        may_publish = auth_ui.can("publicar")
+        if not may_publish:
+            st.info("Seu login não tem permissão para publicar. Salve o SKU editado e peça ao administrador.",
+                    icon=":material/lock:")
         confirm = st.checkbox("Revisei as quatro imagens e quero publicar este SKU.",
                               key=f"confirm_publish_{result['sku']}")
         batch = st.session_state.get("sku_batch")
         is_last = not batch or batch["current_index"] >= len(batch["skus"]) - 1
         with st.container(horizontal=True):
-            publish = st.button("Publicar no BaseLinker", type="primary", disabled=not confirm,
+            publish = st.button("Publicar no BaseLinker", type="primary", disabled=not confirm or not may_publish,
                                 icon=":material/publish:", key=f"publish_{result['sku']}")
             publish_next = bool(batch) and st.button(
                 "Publicar e ver resumo do lote" if is_last else "Publicar e ir para o próximo",
-                type="primary", disabled=not confirm, icon=":material/fast_forward:",
+                type="primary", disabled=not confirm or not may_publish, icon=":material/fast_forward:",
                 key=f"publish_next_{result['sku']}",
             )
-            if st.button("Desfazer última publicação", disabled=not result.get("backup_path"),
+            if st.button("Desfazer última publicação", disabled=not result.get("backup_path") or not may_publish,
                          icon=":material/undo:", key=f"undo_{result['sku']}"):
                 try:
                     client().restore_images(result["backup_path"])
@@ -1802,11 +1979,11 @@ def _finish_batch_now() -> None:
 
 EDITOR_STATE_KEYS = (
     "cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
-    "cover_product_x", "cover_product_y", "cover_product_scale",
-    "image_2_x", "image_2_y", "image_2_scale",
-    "image_3_x", "image_3_y", "image_3_scale",
-    "image_4_x", "image_4_y", "image_4_scale",
-    "part_contrast", "part_sharpness", "fine_tune",
+    "cover_product_x", "cover_product_y", "cover_product_scale", "cover_product_rot",
+    "image_2_x", "image_2_y", "image_2_scale", "image_2_rot",
+    "image_3_x", "image_3_y", "image_3_scale", "image_3_rot",
+    "image_4_x", "image_4_y", "image_4_scale", "image_4_rot",
+    "part_contrast", "part_sharpness", "part_brightness",
 )
 
 
@@ -1907,10 +2084,17 @@ def render_processor() -> None:
 
     for prefix in POSITION_SLIDERS:
         st.session_state.setdefault(f"{prefix}_x", 0)
-        st.session_state.setdefault(f"{prefix}_y", 0)
+        st.session_state.setdefault(f"{prefix}_y", TEXT_DEFAULT_Y if prefix.startswith("text_") else 0)
         st.session_state.setdefault(f"{prefix}_scale", 100)
+        if prefix in ("cover_product", "image_2", "image_3", "image_4"):
+            st.session_state.setdefault(f"{prefix}_rot", 0)
+        if prefix.startswith("text_"):
+            st.session_state.setdefault(f"{prefix}_on", False)
+            st.session_state.setdefault(f"{prefix}_value", "")
+            st.session_state.setdefault(f"{prefix}_color", "#000000")
     st.session_state.setdefault("part_contrast", DEFAULT_CONTRAST_PCT)
     st.session_state.setdefault("part_sharpness", DEFAULT_SHARPNESS_PCT)
+    st.session_state.setdefault("part_brightness", DEFAULT_BRIGHTNESS_PCT)
     st.session_state.setdefault("fine_tune", False)
 
     _render_editor_header(result)
@@ -1918,10 +2102,14 @@ def render_processor() -> None:
     if result.get("product_raw"):
         with loading("Aplicando contraste e nitidez na peça..."):
             _apply_part_treatment(result, st.session_state["part_contrast"],
-                                  st.session_state["part_sharpness"])
+                                  st.session_state["part_sharpness"],
+                                  st.session_state["part_brightness"])
     assets = _drag_assets(result)
     previews = _current_previews(result)
-    reports = [validate_output(image) for image in previews]
+    # Framing checks judge the part only: the text box is decorative and must not trip "off-centre".
+    has_text = any(_text_badge_for(index) is not None for index in range(2, 5))
+    framing_src = _current_previews(result, with_text=False) if has_text else previews
+    reports = [validate_output(image) for image in framing_src]
     if result.get("cover_layers"):
         # The cover is cars on top + part below by design: only cuts at the border matter there.
         reports[0] = {**reports[0], "valid": not reports[0]["clipped"]}
@@ -1987,11 +2175,22 @@ def catalogo() -> None:
 
 
 apply_theme()
-PAGES = [
-    st.Page(processar, title="Processar SKU", icon=":material/auto_awesome:", default=True,
-            help="Lote de SKUs: buscar no BaseLinker, aprovar veículos, ajustar as quatro imagens e publicar."),
-    st.Page(catalogo, title="Catálogo de veículos", icon=":material/directions_car:",
-            help="Importar carros das capas do BaseLinker e cadastrar imagens de veículos para as próximas buscas."),
-    # Next step (login): an admin-only page is appended here when the user is an administrator.
-]
+user = auth_ui.login_gate()
+PAGES = []
+if auth.can(user, "processar"):
+    PAGES.append(st.Page(processar, title="Processar SKU", icon=":material/auto_awesome:", default=True,
+                         help="Lote de SKUs: buscar no BaseLinker, aprovar veículos, ajustar as quatro imagens e publicar."))
+if auth.can(user, "catalogo"):
+    PAGES.append(st.Page(catalogo, title="Catálogo de veículos", icon=":material/directions_car:",
+                         help="Importar carros das capas do BaseLinker e cadastrar imagens de veículos para as próximas buscas."))
+if auth.can(user, "usuarios"):
+    PAGES.append(st.Page(auth_ui.page_users, title="Usuários", icon=":material/group:", url_path="usuarios"))
+if auth.can(user, "configuracoes"):
+    PAGES.append(st.Page(auth_ui.page_settings, title="Configurações", icon=":material/settings:",
+                         url_path="configuracoes"))
+if not PAGES:
+    PAGES.append(st.Page(auth_ui.page_waiting, title="Aguardando liberação", icon=":material/hourglass_top:",
+                         url_path="aguardando"))
+PAGES.append(st.Page(auth_ui.page_account, title=user["nome"].split()[0], icon=":material/account_circle:",
+                     url_path="conta"))
 st.navigation(PAGES, position="top").run()
