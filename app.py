@@ -32,7 +32,7 @@ from image_processor import (
 )
 from project_utils import normalized_tokens, sanitize_sku
 from ui.drag_canvas import drag_canvas, image_data_url
-from ui.theme import ICON, apply_theme, flow_steps, loading, page_header
+from ui.theme import ICON, STEPS, apply_theme, loading, page_header
 from vehicle_search import VehicleSearchError, find_vehicle_images
 
 
@@ -47,6 +47,18 @@ PREVIEW_WIDE = 720
 PREVIEW_THUMB = 280
 NEON_FRAME = "#00b4ff"  # screen-only frame around white images (never in the exported files)
 VEHICLE_LIBRARY_FILE = FILES_DIR / "mapa" / "vehicles.csv"
+BATCH_SIZES = (10, 20, 30)
+
+
+def _star_setting(name: str, default: str) -> int | None:
+    value = os.getenv(name, default).strip()
+    return int(value) if value.isdigit() else None
+
+
+# BaseLinker star types (0-5). TODO = SKUs waiting for images (yellow); DONE = set when published (red).
+# Leave BASELINKER_STAR_DONE empty to never change the star.
+STAR_TODO = _star_setting("BASELINKER_STAR_TODO", "5")
+STAR_DONE = _star_setting("BASELINKER_STAR_DONE", "")
 
 st.set_page_config(page_title="LMR Edit", page_icon=str(ICON), layout="wide")
 
@@ -397,6 +409,7 @@ def _load_sku(sku: str, data: dict | None = None) -> None:
     }
     st.session_state.pop("batch_error", None)
     st.session_state.pop("result", None)
+    st.session_state.pop("parked_result", None)
 
 
 def _start_sku_batch(skus: list[str]) -> None:
@@ -552,6 +565,9 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
     }
     _apply_part_treatment(st.session_state["result"], DEFAULT_CONTRAST_PCT, DEFAULT_SHARPNESS_PCT)
     _reset_editor_state()
+    st.session_state["result"]["review"] = pending
+    st.session_state["result"]["review_signature"] = _review_signature(approved_choices)
+    st.session_state.pop("parked_result", None)
     st.session_state.pop("pending_vehicle_review", None)
 
 
@@ -875,11 +891,12 @@ def _render_publish_all(batch: dict, entries: list[dict]) -> None:
                     images = public_urls(data["paths"], base_url, data["sku"])
                 else:
                     images = [api.image_file_to_data(path) for path in data["paths"]]
-                api.update_images(data["product_id"], images, data["product_images"][4:])
+                api.update_images(data["product_id"], images, data["product_images"][4:], star=STAR_DONE)
             except (BaseLinkerError, ValueError, OSError) as error:
                 errors.append(f"SKU {data['sku']}: {error}")
                 continue
             summary[index] = {**entry, "status": "published", "publish_data": None}
+            _mark_published(data["sku"])
         progress.progress(1.0, text="Concluído.")
         st.session_state["sku_batch"] = batch
         st.session_state.pop("confirm_publish_all", None)
@@ -897,6 +914,14 @@ def _render_vehicle_review() -> None:
 
     _render_sku_title(pending["sku"], _product_name(pending.get("product", {})),
                       pending.get("batch_index", 0), pending.get("batch_total", 1))
+    if _parked_result_for(pending["sku"]):
+        with st.container(border=True, key="lmr-card-parked"):
+            with st.container(horizontal=True, vertical_alignment="center"):
+                st.markdown(":material/bookmark: **Suas edições deste SKU estão salvas.** Se não trocar os "
+                            "carros, o editor volta exatamente como estava, sem processar de novo.")
+                if st.button("Voltar ao editor", type="primary", icon=":material/arrow_forward:",
+                             key=f"restore_editor_{pending['sku']}"):
+                    _restore_parked_result()
     _render_copy_cars_from_sku(pending)
 
     if pending["choices"] is None:
@@ -1211,6 +1236,10 @@ def _generate_from_review(pending: dict, choices: list[dict]) -> None:
     if not approved:
         st.warning("Aprove pelo menos uma imagem de veículo para gerar a capa.", icon=":material/warning:")
         return
+    parked = _parked_result_for(pending["sku"])
+    if parked and parked.get("review_signature") == _review_signature(choices):
+        _restore_parked_result()  # nothing changed: reopen the editor as it was
+        return
     try:
         with loading("Gerando a capa e as imagens 2 a 4..."):
             _generate_sku(pending, approved)
@@ -1253,17 +1282,25 @@ def _status_label() -> tuple[str, str, str]:
 
 
 def _reset_batch() -> None:
-    for key in ("sku_batch", "result", "pending_vehicle_review", "batch_error"):
+    for key in ("sku_batch", "result", "pending_vehicle_review", "batch_error", "parked_result"):
         st.session_state.pop(key, None)
 
 
-def _start_batch_from_text(queue_text: str) -> None:
-    skus = list(dict.fromkeys(item.strip() for item in re.split(r"[\n,;\s]+", queue_text) if item.strip()))
+def _batch_size() -> int:
+    # The size picker is not on screen during a batch, so the last used size is kept separately.
+    return int(st.session_state.get("batch_size") or st.session_state.get("last_batch_size") or BATCH_SIZES[0])
+
+
+def _start_batch(skus: list[str]) -> None:
+    """Fetch every SKU of the batch once and open the first one."""
+    skus = list(dict.fromkeys(sku.strip() for sku in skus if sku and sku.strip()))
+    size = _batch_size()
     if not skus:
-        st.error("Informe pelo menos um SKU.", icon=":material/error:")
+        st.error("Escolha pelo menos um SKU.", icon=":material/error:")
         return
-    if len(skus) > 10:
-        st.error("O lote aceita no máximo 10 SKUs.", icon=":material/error:")
+    if len(skus) > size:
+        st.error(f"O lote está configurado para no máximo {size} SKUs (você escolheu {len(skus)}).",
+                 icon=":material/error:")
         return
     try:
         with loading(f"Consultando {len(skus)} SKU(s) no BaseLinker..."):
@@ -1271,30 +1308,136 @@ def _start_batch_from_text(queue_text: str) -> None:
     except (BaseLinkerError, ValueError, VehicleSearchError, OSError) as error:
         st.error(str(error), icon=":material/error:")
         return
+    st.session_state["last_batch_size"] = size
+    attempted = st.session_state.setdefault("attempted_skus", set())
+    attempted.update(sanitize_sku(sku) for sku in skus)
     st.rerun()
 
 
+# ---------- Star queue: SKUs marked with the "to do" star in BaseLinker ----------
+
+def _mark_published(sku: str) -> None:
+    st.session_state.setdefault("published_skus", set()).add(sanitize_sku(sku))
+
+
+def _star_queue_split() -> tuple[list[dict], list[dict]]:
+    """(not opened yet, opened but not published) from the starred list, published ones removed."""
+    queue = (st.session_state.get("star_queue") or {}).get("items", [])
+    published = st.session_state.get("published_skus", set())
+    attempted = st.session_state.get("attempted_skus", set())
+    remaining = [item for item in queue if sanitize_sku(item["sku"]) not in published]
+    fresh = [item for item in remaining if sanitize_sku(item["sku"]) not in attempted]
+    retry = [item for item in remaining if sanitize_sku(item["sku"]) in attempted]
+    return fresh, retry
+
+
+def _next_star_batch() -> list[str]:
+    """Next batch from the queue: SKUs not opened yet first; opened-but-unpublished only when none are left."""
+    fresh, retry = _star_queue_split()
+    return [item["sku"] for item in (fresh or retry)[:_batch_size()]]
+
+
+def _load_star_queue() -> None:
+    if STAR_TODO is None:
+        st.error("Configure BASELINKER_STAR_TODO no arquivo .env.", icon=":material/error:")
+        return
+    bar = st.progress(0.0, text="Lendo o inventário do BaseLinker...")
+    try:
+        items = client().find_starred(
+            STAR_TODO, lambda fraction, message: bar.progress(min(fraction, 1.0), text=message)
+        )
+    except (BaseLinkerError, ValueError) as error:
+        bar.empty()
+        st.error(str(error), icon=":material/error:")
+        return
+    st.session_state["star_queue"] = {"items": items}
+    st.rerun()
+
+
+def _render_star_picker() -> list[str]:
+    """Starred SKUs with checkboxes; the next batch comes pre-selected. Returns the chosen SKUs."""
+    queue = st.session_state.get("star_queue")
+    if not queue:
+        st.caption("Busca no BaseLinker os produtos marcados com a estrela de fazer imagem. Lê o inventário "
+                   "inteiro uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver aberto.")
+        if st.button("Buscar SKUs com estrela", icon=":material/star:", key="load_star_queue", width="stretch"):
+            _load_star_queue()
+        return []
+    fresh, retry = _star_queue_split()
+    total = len(queue["items"])
+    with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+        st.badge(f"{total} com estrela", icon=":material/star:", color="yellow")
+        st.badge(f"{total - len(fresh) - len(retry)} publicados", icon=":material/check_circle:", color="green")
+        st.badge(f"{len(fresh)} na fila", icon=":material/pending:", color="blue")
+        if retry:
+            st.badge(f"{len(retry)} abertos sem publicar", icon=":material/edit_note:", color="orange")
+        st.space("stretch")
+        if st.button("Atualizar", icon=":material/refresh:", key="reload_star_queue", type="tertiary",
+                     help="Lê o BaseLinker de novo (inclui estrelas marcadas depois da última busca)."):
+            _load_star_queue()
+    rows = fresh + retry
+    if not rows:
+        st.success("Todos os SKUs com estrela já foram publicados.", icon=":material/task_alt:")
+        return []
+    preselected = set(_next_star_batch())
+    st.space("small")  # room for the table toolbar, which floats above its top-right corner
+    table = pd.DataFrame({
+        "Incluir": [item["sku"] in preselected for item in rows],
+        "SKU": [item["sku"] for item in rows],
+        "Produto": [item["name"] for item in rows],
+        "Situação": ["Na fila" if item in fresh else "Aberto, não publicado" for item in rows],
+    })
+    edited = st.data_editor(
+        table,
+        key=f"star_pick_{_batch_size()}_{len(rows)}",
+        hide_index=True,
+        disabled=["SKU", "Produto", "Situação"],
+        height=min(420, 38 + 35 * len(rows)),
+        column_config={
+            "Incluir": st.column_config.CheckboxColumn(width="small"),
+            "SKU": st.column_config.TextColumn(width="small"),
+            "Produto": st.column_config.TextColumn(width="large"),
+            "Situação": st.column_config.TextColumn(width="small"),
+        },
+    )
+    return edited.loc[edited["Incluir"], "SKU"].tolist()
+
+
 def _render_batch_start() -> None:
-    """Central panel shown when no batch is running: paste SKUs and start."""
-    _, center, _ = st.columns([1, 2.2, 1])
+    """Central panel shown when no batch is running: pick starred SKUs (or paste) and start."""
+    _, center, _ = st.columns([1, 3, 1])
     with center, st.container(border=True, key="lmr-card-start"):
         st.subheader("Novo lote de SKUs", icon=":material/inventory_2:")
-        st.caption("Cole de 1 a 10 SKUs, um por linha (também aceita vírgula ou espaço).")
-        queue_text = st.text_area(
-            "SKUs do lote",
-            placeholder="00010280\n00004278\n00002185",
-            key="sku_batch_input",
-            height=160,
-            label_visibility="collapsed",
-        )
-        if st.button("Iniciar lote", type="primary", icon=":material/play_arrow:", key="start_batch",
-                     width="stretch"):
-            _start_batch_from_text(queue_text)
-        st.divider()
+        with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
+            source = st.segmented_control(
+                "Origem dos SKUs", ["Estrela no BaseLinker", "Colar SKUs"],
+                default="Estrela no BaseLinker", key="batch_source", required=True,
+            )
+            st.segmented_control("SKUs por lote", BATCH_SIZES, default=BATCH_SIZES[0], key="batch_size",
+                                 required=True)
+        if source == "Colar SKUs":
+            queue_text = st.text_area(
+                "SKUs do lote",
+                placeholder="00010280\n00004278\n00002185",
+                key="sku_batch_input",
+                height=160,
+                help="Um por linha; também aceita vírgula, ponto e vírgula ou espaço.",
+            )
+            chosen = [item for item in re.split(r"[\n,;\s]+", queue_text) if item.strip()]
+        else:
+            chosen = _render_star_picker()
+        # Pasted text only reaches Python when the box loses focus, so in that mode the button stays enabled
+        # (clicking it sends the text) and the count is not shown.
+        pasting = source == "Colar SKUs"
+        label = f"Iniciar lote ({len(chosen)})" if chosen and not pasting else "Iniciar lote"
+        if st.button(label, type="primary", icon=":material/play_arrow:", key="start_batch", width="stretch",
+                     disabled=not pasting and not chosen):
+            _start_batch(chosen)
         st.markdown(
             ":gray[:material/looks_one: Confira os carros compatíveis · "
             ":material/looks_two: arraste a peça no editor (**Ctrl + roda** = zoom) · "
-            ":material/looks_3: revise e publique no BaseLinker]"
+            ":material/looks_3: revise e publique no BaseLinker"
+            + (" (a estrela muda de cor ao publicar)" if STAR_DONE is not None else "") + "]"
         )
 
 
@@ -1367,7 +1510,14 @@ def _render_empty_state() -> None:
     if batch and batch.get("completed"):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.success("Lote concluído.", icon=":material/task_alt:", width="stretch")
-            if st.button("Novo lote", type="primary", icon=":material/add:", key="new_batch_done"):
+            next_skus = _next_star_batch() if st.session_state.get("star_queue") else []
+            if next_skus and st.button(f"Próximo lote ({len(next_skus)})", type="primary",
+                                       icon=":material/skip_next:", key="next_star_batch",
+                                       help="Próximos SKUs com estrela que ainda não foram publicados."):
+                _reset_batch()
+                _start_batch(next_skus)
+            if st.button("Novo lote", type="secondary" if next_skus else "primary", icon=":material/add:",
+                         key="new_batch_done"):
                 _reset_batch()
                 st.rerun()
         _render_batch_summary(batch)
@@ -1376,6 +1526,11 @@ def _render_empty_state() -> None:
 
 
 def _render_editor_header(result: dict) -> None:
+    if result.get("review") and st.button("Voltar para veículos", icon=":material/arrow_back:",
+                                          key=f"back_to_vehicles_{result['sku']}", type="tertiary",
+                                          help="Os ajustes desta tela ficam salvos. Se não trocar os carros, "
+                                               "o editor volta exatamente como está."):
+        _back_to_vehicles()
     _render_sku_title(result["sku"], result.get("product_name", ""), result.get("batch_index", 0),
                       result.get("batch_total", 1), result.get("approved_vehicles", []),
                       bool(result.get("published")))
@@ -1488,7 +1643,7 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
 
 def _render_publish(result: dict, previews: list[Image.Image], reports: list[dict]) -> None:
     with st.container(border=True, key="lmr-card-publish"):
-        st.subheader("Revisar e publicar", icon=":material/cloud_upload:")
+        st.subheader("Revisar e publicar", icon=":material/cloud_upload:", anchor="publicar")
         invalid = [str(index) for index, report in enumerate(reports, start=1) if not report["valid"]]
         if invalid:
             st.warning(f"Revise o enquadramento das imagens {', '.join(invalid)} antes de publicar.",
@@ -1538,7 +1693,7 @@ def _publish(result: dict, base_url: str) -> list[Image.Image] | None:
             images = public_urls(result["paths"], base_url, result["sku"])
         else:
             images = [api.image_file_to_data(path) for path in result["paths"]]
-        api.update_images(result["product_id"], images, result["product_images"][4:])
+        api.update_images(result["product_id"], images, result["product_images"][4:], star=STAR_DONE)
     except (BaseLinkerError, ValueError, OSError) as error:
         st.error(str(error), icon=":material/error:")
         return None
@@ -1547,6 +1702,7 @@ def _publish(result: dict, base_url: str) -> list[Image.Image] | None:
     result["published_cover"] = finals[0]
     st.session_state["result"] = result
     _record_batch_item("published", finals[0], result.get("product_name", ""))
+    _mark_published(result["sku"])
     st.toast("Publicado no BaseLinker.", icon=":material/check_circle:")
     st.success(f"Publicado. Backup salvo em {backup}.", icon=":material/check_circle:")
     return finals
@@ -1585,6 +1741,87 @@ def _render_batch_navigation(result: dict, previews: list[Image.Image]) -> None:
         _advance_batch("edited", cover, result.get("product_name", ""), publish_data)
 
 
+# ---------- Step navigation: go back without losing edits or re-processing ----------
+# The vehicle review is kept inside the result. Going back to step 2 parks the result (with a snapshot of
+# the editor controls); returning without changing the cars restores it as it was: no new BaseLinker
+# query, no download, no background removal.
+
+EDITOR_STATE_KEYS = (
+    "cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
+    "cover_product_x", "cover_product_y", "cover_product_scale",
+    "image_2_x", "image_2_y", "image_2_scale",
+    "image_3_x", "image_3_y", "image_3_scale",
+    "image_4_x", "image_4_y", "image_4_scale",
+    "part_contrast", "part_sharpness", "fine_tune",
+)
+
+
+def _review_signature(choices: list[dict]) -> tuple:
+    """Identity of the approved cars: same brand/model/years and the very same image objects."""
+    return tuple((choice.get("brand"), choice.get("model"), choice.get("years"), id(choice.get("image")))
+                 for choice in choices if choice.get("status") == "approved")
+
+
+def _parked_result_for(sku: str) -> dict | None:
+    parked = st.session_state.get("parked_result")
+    return parked if parked and parked.get("sku") == sku else None
+
+
+def _back_to_vehicles() -> None:
+    result = st.session_state.get("result")
+    if not result or not result.get("review"):
+        return
+    result["editor_state"] = {key: st.session_state[key] for key in EDITOR_STATE_KEYS if key in st.session_state}
+    st.session_state["parked_result"] = result
+    st.session_state["pending_vehicle_review"] = result["review"]
+    st.session_state.pop("result", None)
+    st.rerun()
+
+
+def _restore_parked_result() -> None:
+    parked = st.session_state.pop("parked_result", None)
+    if not parked:
+        return
+    for key, value in (parked.get("editor_state") or {}).items():
+        st.session_state[key] = value
+    st.session_state["result"] = parked
+    st.session_state.pop("pending_vehicle_review", None)
+    st.rerun()
+
+
+def _render_steps() -> None:
+    """Steps 1-4 as a trail: finished steps you can return to are buttons."""
+    stage = _flow_stage()
+    result = st.session_state.get("result")
+    pending = st.session_state.get("pending_vehicle_review")
+    can_go = {
+        1: stage in (2, 3, 4),
+        2: bool(result and result.get("review")),
+        3: bool(pending and _parked_result_for(pending["sku"])),
+        4: stage == 3,
+    }
+    actions = {1: _confirm_new_batch, 2: _back_to_vehicles, 3: _restore_parked_result}
+    with st.container(horizontal=True, gap="small", vertical_alignment="center", key="lmr-steps"):
+        for index, (label, icon) in enumerate(STEPS, start=1):
+            text = f"{index}. {label}"
+            if index == min(stage, 4) and stage <= 4:
+                st.badge(text, icon=icon, color="blue")
+            elif can_go[index] and index == 4:
+                st.markdown(f"[{icon} {text}](#publicar)", width="content",
+                            help="Ir para a revisão e publicação, no fim desta página.")
+            elif can_go[index]:
+                if st.button(text, icon=":material/undo:" if index < stage else icon, type="tertiary",
+                             key=f"goto_step_{index}",
+                             help="Novo lote" if index == 1 else f"Voltar para {label.lower()} sem perder o que já fez"):
+                    actions[index]()
+            elif index < stage:
+                st.badge(text, icon=":material/check_circle:", color="green")
+            else:
+                st.badge(text, icon=icon, color="gray")
+            if index < len(STEPS):
+                st.markdown(":gray[:material/chevron_right:]", width="content")
+
+
 def _flow_stage() -> int:
     if st.session_state.get("pending_vehicle_review"):
         return 2
@@ -1597,7 +1834,7 @@ def _flow_stage() -> int:
 
 
 def render_processor() -> None:
-    flow_steps(_flow_stage())
+    _render_steps()
     _render_batch_bar()
 
     batch_error = st.session_state.get("batch_error")

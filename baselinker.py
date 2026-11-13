@@ -106,20 +106,59 @@ class BaseLinkerClient:
         product_id: str,
         image_urls: list[str],
         existing_images: list[str] | None = None,
+        star: int | None = None,
     ) -> None:
-        """Replace the first positions and keep `existing_images` after them (max 16)."""
+        """Replace the first positions and keep `existing_images` after them (max 16).
+
+        `star` (0-5) is changed in the same call, so it only changes when the images are sent.
+        """
         images = {
             str(index): f"url:{url}" if not url.startswith(("url:", "data:")) else url
             for index, url in enumerate((image_urls + (existing_images or []))[:16])
         }
-        self.call(
-            "addInventoryProduct",
-            {
-                "inventory_id": self.inventory_id,
-                "product_id": product_id,
-                "images": images,
-            },
-        )
+        parameters: dict[str, Any] = {
+            "inventory_id": self.inventory_id,
+            "product_id": product_id,
+            "images": images,
+        }
+        if star is not None:
+            parameters["star"] = int(star)
+        self.call("addInventoryProduct", parameters)
+
+    def list_product_ids(self) -> list[str]:
+        """Every product ID of the inventory (the list method pages by 1000)."""
+        ids: list[str] = []
+        page = 1
+        while True:
+            batch = self.call("getInventoryProductsList", {"inventory_id": self.inventory_id, "page": page})
+            products = batch.get("products", {}) or {}
+            ids.extend(str(product_id) for product_id in products)
+            if len(products) < 1000:
+                return ids
+            page += 1
+
+    def find_starred(self, star: int, progress=None) -> list[dict[str, str]]:
+        """SKU, name and ID of every product with this star type.
+
+        The API cannot filter by star, so the whole inventory is read in blocks of 1000.
+        `progress(fraction, message)` is called after each block.
+        """
+        ids = self.list_product_ids()
+        found: list[dict[str, str]] = []
+        blocks = range(0, len(ids), 1000)
+        for done, start in enumerate(blocks, start=1):
+            chunk = [int(product_id) for product_id in ids[start:start + 1000]]
+            data = self.call("getInventoryProductsData", {"inventory_id": self.inventory_id, "products": chunk})
+            for product_id, product in (data.get("products") or {}).items():
+                if int(product.get("star") or 0) == int(star) and str(product.get("sku") or "").strip():
+                    found.append({
+                        "product_id": str(product_id),
+                        "sku": str(product["sku"]).strip(),
+                        "name": str((product.get("text_fields") or {}).get("name", "")).strip(),
+                    })
+            if progress:
+                progress(done / len(blocks), f"Lendo o inventário: {min(start + 1000, len(ids))} de {len(ids)}")
+        return sorted(found, key=lambda item: item["sku"])
 
     @staticmethod
     def image_file_to_data(path: str | Path) -> str:

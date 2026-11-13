@@ -41,6 +41,39 @@ def test_update_images_preserves_extra_positions(monkeypatch):
     }
 
 
+def test_update_images_sends_star_only_when_given(monkeypatch):
+    client = BaseLinkerClient("token", "inventory", "https://example.test")
+    calls = []
+    monkeypatch.setattr(client, "call", lambda method, params: calls.append(params) or {"status": "SUCCESS"})
+    client.update_images("42", ["https://new/1"])
+    client.update_images("42", ["https://new/1"], star=3)
+    assert "star" not in calls[0]
+    assert calls[1]["star"] == 3
+
+
+def test_find_starred_reads_every_page_and_keeps_only_that_star(monkeypatch):
+    client = BaseLinkerClient("token", "inventory", "https://example.test")
+    first_page = {str(i): {"id": i} for i in range(1, 1001)}
+    second_page = {"1001": {"id": 1001}, "1002": {"id": 1002}}
+
+    def fake_call(method, parameters):
+        if method == "getInventoryProductsList":
+            return {"status": "SUCCESS", "products": first_page if parameters["page"] == 1 else second_page}
+        products = {
+            str(pid): {"sku": f"{pid:08d}", "star": 5 if pid in (7, 1002) else 0,
+                       "text_fields": {"name": f"Peça {pid}"}}
+            for pid in parameters["products"]
+        }
+        return {"status": "SUCCESS", "products": products}
+
+    monkeypatch.setattr(client, "call", fake_call)
+    progress = []
+    found = client.find_starred(5, lambda fraction, message: progress.append(fraction))
+    assert [item["sku"] for item in found] == ["00000007", "00001002"]
+    assert found[0] == {"product_id": "7", "sku": "00000007", "name": "Peça 7"}
+    assert progress == [0.5, 1.0]
+
+
 def test_find_product_matches_sku_registered_with_leading_space(monkeypatch):
     client = BaseLinkerClient("token", "inventory", "https://example.test")
     filters = []
