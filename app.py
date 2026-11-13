@@ -31,6 +31,7 @@ from image_processor import (
     product_image,
     public_urls,
     reposition_image,
+    rotate_content,
     sharpen,
     validate_output,
 )
@@ -398,11 +399,11 @@ def _set_cover_photo(result: dict, photo_number: int) -> None:
 
 def _reset_editor_state() -> None:
     for key in ("cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
-                "cover_product_x", "cover_product_y", "cover_product_scale",
+                "cover_product_x", "cover_product_y", "cover_product_scale", "cover_product_rot",
                 "part_contrast", "part_sharpness", "part_brightness"):
         st.session_state.pop(key, None)
     for index in range(2, 5):
-        for suffix in ("x", "y", "scale"):
+        for suffix in ("x", "y", "scale", "rot"):
             st.session_state.pop(f"image_{index}_{suffix}", None)
 
 
@@ -603,10 +604,20 @@ def _generate_sku(pending: dict, approved_choices: list[dict]) -> None:
     st.session_state.pop("pending_vehicle_review", None)
 
 
+def _part_rotation(prefix: str) -> int:
+    return int(st.session_state.get(f"{prefix}_rot", 0))
+
+
+def _part_rotations(result: dict) -> tuple[int, ...]:
+    prefixes = (["cover_product"] if result.get("cover_layers") else []) + [f"image_{i}" for i in range(2, 5)]
+    return tuple(_part_rotation(prefix) for prefix in prefixes)
+
+
 def _drag_assets(result: dict) -> dict:
-    """Browser copies of each layer, encoded once per generated SKU."""
+    """Browser copies of each layer, encoded once per generated SKU (re-encoded when a part rotates)."""
+    rotations = _part_rotations(result)
     assets = result.get("drag_assets")
-    if assets:
+    if assets and result.get("drag_assets_rot") == rotations:
         return assets
     assets = {}
     to_encode: dict[str, Image.Image] = {}
@@ -614,16 +625,18 @@ def _drag_assets(result: dict) -> dict:
     if layers:
         previous = result.get("drag_vehicle_asset")
         if previous and previous[0] is layers["vehicle"]:
-            assets["vehicle"] = previous[1]  # the cars do not change with the part treatment
+            assets["vehicle"] = previous[1]  # the cars do not change with the part treatment/rotation
         else:
             to_encode["vehicle"] = ImageOps.contain(layers["vehicle"], (1060, 390))
-        to_encode["product"] = layers["product"]
+        product = rotate_content(layers["product"], _part_rotation("cover_product"))
+        to_encode["product"] = product
         assets["vehicle_size"] = layers["vehicle"].size
-        assets["product_size"] = layers["product"].size
+        assets["product_size"] = product.size
     for index in range(2, 5):
         source = result["editor_sources"][index]
         bbox = content_bbox(source)
         content = source.crop(bbox) if bbox else source
+        content = rotate_content(content, _part_rotation(f"image_{index}"))
         to_encode[f"image_{index}"] = content
         assets[f"image_{index}_size"] = content.size
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -631,6 +644,7 @@ def _drag_assets(result: dict) -> dict:
     if layers:
         result["drag_vehicle_asset"] = (layers["vehicle"], assets["vehicle"])
     result["drag_assets"] = assets
+    result["drag_assets_rot"] = rotations
     return assets
 
 
@@ -671,7 +685,8 @@ def _current_previews(result: dict, final: bool = False, with_text: bool = True)
     resampling = Image.Resampling.LANCZOS if final else Image.Resampling.BILINEAR
     if result.get("cover_layers"):
         cover = compose_cover(
-            result["cover_layers"]["vehicle"], result["cover_layers"]["product"],
+            result["cover_layers"]["vehicle"],
+            rotate_content(result["cover_layers"]["product"], _part_rotation("cover_product")),
             st.session_state.get("cover_vehicle_x", 0), st.session_state.get("cover_vehicle_y", 0),
             st.session_state.get("cover_vehicle_scale", 100), st.session_state.get("cover_product_x", 0),
             st.session_state.get("cover_product_y", 0), st.session_state.get("cover_product_scale", 100),
@@ -686,6 +701,7 @@ def _current_previews(result: dict, final: bool = False, with_text: bool = True)
             st.session_state.get(f"image_{index}_x", 0),
             st.session_state.get(f"image_{index}_y", 0),
             st.session_state.get(f"image_{index}_scale", 100),
+            _part_rotation(f"image_{index}"),
             resampling=resampling,
         )
         badge = _text_badge_for(index) if with_text else None
@@ -1366,6 +1382,12 @@ def _position_sliders(prefix: str, scale_range: tuple[int, int] = (50, 150)) -> 
     st.slider("Zoom", *scale_range, step=5, key=f"{prefix}_scale", persist_state="page", format="%d%%")
 
 
+def _part_controls(prefix: str, scale_range: tuple[int, int] = (50, 150)) -> None:
+    """Lado / altura / zoom + girar (como no Canva), para a peça da capa e das imagens 2 a 4."""
+    _position_sliders(prefix, scale_range)
+    st.slider("Girar", -180, 180, step=1, key=f"{prefix}_rot", persist_state="page", format="%d°")
+
+
 def _status_label() -> tuple[str, str, str]:
     if st.session_state.get("batch_error"):
         return "Falha na consulta", ":material/error:", "red"
@@ -1691,8 +1713,8 @@ def _render_cover_photo_buttons(result: dict) -> None:
 
 def _render_toolbar(result: dict) -> None:
     with st.container(border=True, key="lmr-card-toolbar"):
-        brightness_col, contrast_col, sharpness_col, reset_col, fine_col = st.columns(
-            [3, 3, 3, 1.6, 2.2], vertical_alignment="bottom", gap="medium"
+        brightness_col, contrast_col, sharpness_col, reset_col = st.columns(
+            [3, 3, 3, 2], vertical_alignment="bottom", gap="medium"
         )
         has_raw = bool(result.get("product_raw"))
         with brightness_col:
@@ -1707,9 +1729,6 @@ def _render_toolbar(result: dict) -> None:
         with reset_col:
             st.button("Padrão", on_click=_reset_part_treatment, width="stretch", disabled=not has_raw,
                       icon=":material/restart_alt:", help="Volta brilho, contraste e nitidez para o padrão.")
-        with fine_col:
-            st.toggle("Ajuste fino", key="fine_tune",
-                      help="Mostra as barras de lado, altura e zoom ao lado de cada imagem.")
 
 
 def _framing_badge(report: dict, cover: bool = False) -> None:
@@ -1725,17 +1744,13 @@ def _framing_badge(report: dict, cover: bool = False) -> None:
         )
 
 
-def _image_tab(fine_tune: bool):
-    """Columns for one tab: canvas centred when the bars are hidden, canvas + bars otherwise."""
-    if fine_tune:
-        canvas_col, controls_col = st.columns([3, 2], gap="large")
-        return canvas_col, controls_col
-    _, canvas_col, _ = st.columns([1, 4, 1])
-    return canvas_col, None
+def _image_tab():
+    """Controls on the left (using the empty space), canvas on the right."""
+    controls_col, canvas_col = st.columns([2, 3], gap="large")
+    return canvas_col, controls_col
 
 
 def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
-    fine_tune = st.session_state.get("fine_tune", False)
     tabs = st.tabs([
         ":material/photo_library: Imagem 1 · Capa",
         ":material/image: Imagem 2",
@@ -1744,8 +1759,7 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
     ])
     with tabs[0]:
         if result.get("cover_layers"):
-            _render_cover_photo_buttons(result)
-            canvas_col, controls_col = _image_tab(fine_tune)
+            canvas_col, controls_col = _image_tab()
             with canvas_col:
                 vehicle_base, product_base = cover_base_sizes(
                     assets["vehicle_size"], assets["product_size"],
@@ -1762,14 +1776,14 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
                      "y_range": list(POSITION_SLIDERS["cover_product"]["y"]), "scale_range": [50, 150]},
                 ], {"vehicle": "cover_vehicle", "product": "cover_product"}, key="drag_cover")
                 _framing_badge(reports[0], cover=True)
-            if controls_col:
-                with controls_col:
-                    with st.container(border=True, key="lmr-card-vehicle-sliders"):
-                        st.markdown("**:material/directions_car: Veículos**")
-                        _position_sliders("cover_vehicle")
-                    with st.container(border=True, key="lmr-card-product-sliders"):
-                        st.markdown("**:material/build: Peça**")
-                        _position_sliders("cover_product")
+            with controls_col:
+                _render_cover_photo_buttons(result)
+                with st.container(border=True, key="lmr-card-product-sliders"):
+                    st.markdown("**:material/build: Peça da capa**")
+                    _part_controls("cover_product")
+                with st.container(border=True, key="lmr-card-vehicle-sliders"):
+                    st.markdown("**:material/directions_car: Veículos**")
+                    _position_sliders("cover_vehicle")
         else:
             _, canvas_col, _ = st.columns([1, 4, 1])
             with canvas_col:
@@ -1780,7 +1794,7 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
     for index, tab in enumerate(tabs[1:], start=2):
         with tab:
             badge = _text_badge_for(index)
-            canvas_col, controls_col = _image_tab(fine_tune)
+            canvas_col, controls_col = _image_tab()
             with canvas_col:
                 content_size = assets[f"image_{index}_size"]
                 layers = [
@@ -1802,12 +1816,11 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
                     prefixes["text"] = f"text_{index}"
                 drag_canvas(layers, prefixes, key=f"drag_image_{index}")
                 _framing_badge(reports[index - 1])
-            if controls_col:
-                with controls_col:
-                    with st.container(border=True, key=f"lmr-card-sliders-{index}"):
-                        st.markdown("**:material/build: Peça**")
-                        _position_sliders(f"image_{index}")
-            _render_text_controls(index, badge is not None)
+            with controls_col:
+                with st.container(border=True, key=f"lmr-card-sliders-{index}"):
+                    st.markdown("**:material/build: Peça**")
+                    _part_controls(f"image_{index}")
+                _render_text_controls(index, badge is not None)
 
 
 def _render_publish(result: dict, previews: list[Image.Image], reports: list[dict]) -> None:
@@ -1966,11 +1979,11 @@ def _finish_batch_now() -> None:
 
 EDITOR_STATE_KEYS = (
     "cover_vehicle_x", "cover_vehicle_y", "cover_vehicle_scale",
-    "cover_product_x", "cover_product_y", "cover_product_scale",
-    "image_2_x", "image_2_y", "image_2_scale",
-    "image_3_x", "image_3_y", "image_3_scale",
-    "image_4_x", "image_4_y", "image_4_scale",
-    "part_contrast", "part_sharpness", "fine_tune",
+    "cover_product_x", "cover_product_y", "cover_product_scale", "cover_product_rot",
+    "image_2_x", "image_2_y", "image_2_scale", "image_2_rot",
+    "image_3_x", "image_3_y", "image_3_scale", "image_3_rot",
+    "image_4_x", "image_4_y", "image_4_scale", "image_4_rot",
+    "part_contrast", "part_sharpness", "part_brightness",
 )
 
 
@@ -2073,6 +2086,8 @@ def render_processor() -> None:
         st.session_state.setdefault(f"{prefix}_x", 0)
         st.session_state.setdefault(f"{prefix}_y", TEXT_DEFAULT_Y if prefix.startswith("text_") else 0)
         st.session_state.setdefault(f"{prefix}_scale", 100)
+        if prefix in ("cover_product", "image_2", "image_3", "image_4"):
+            st.session_state.setdefault(f"{prefix}_rot", 0)
         if prefix.startswith("text_"):
             st.session_state.setdefault(f"{prefix}_on", False)
             st.session_state.setdefault(f"{prefix}_value", "")
