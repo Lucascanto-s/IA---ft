@@ -55,10 +55,10 @@ def _star_setting(name: str, default: str) -> int | None:
     return int(value) if value.isdigit() else None
 
 
-# BaseLinker star types (0-5). TODO = SKUs waiting for images (yellow); DONE = set when published (red).
-# Leave BASELINKER_STAR_DONE empty to never change the star.
-STAR_TODO = _star_setting("BASELINKER_STAR_TODO", "5")
-STAR_DONE = _star_setting("BASELINKER_STAR_DONE", "")
+# BaseLinker star types, in the order of its star filter: 0 none, 1 blue, 2 wine, 3 green, 4 yellow, 5 red.
+# TODO = SKUs waiting for images (yellow); DONE = set when published (red). Empty DONE = never change the star.
+STAR_TODO = _star_setting("BASELINKER_STAR_TODO", "4")
+STAR_DONE = _star_setting("BASELINKER_STAR_DONE", "5")
 
 st.set_page_config(page_title="LMR Edit", page_icon=str(ICON), layout="wide")
 
@@ -1358,15 +1358,17 @@ def _render_star_picker() -> list[str]:
     """Starred SKUs with checkboxes; the next batch comes pre-selected. Returns the chosen SKUs."""
     queue = st.session_state.get("star_queue")
     if not queue:
-        st.caption("Busca no BaseLinker os produtos marcados com a estrela de fazer imagem. Lê o inventário "
-                   "inteiro uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver aberto.")
-        if st.button("Buscar SKUs com estrela", icon=":material/star:", key="load_star_queue", width="stretch"):
+        st.caption("Busca no BaseLinker os produtos com a :yellow[**estrela amarela**] (fazer imagem). Lê o "
+                   "inventário inteiro uma vez (leva alguns segundos) e guarda a lista enquanto o app estiver "
+                   "aberto. Ao publicar, a estrela vira :red[**vermelha**].")
+        if st.button(":yellow[:material/star:] Buscar SKUs com estrela amarela", key="load_star_queue",
+                     width="stretch"):
             _load_star_queue()
         return []
     fresh, retry = _star_queue_split()
     total = len(queue["items"])
     with st.container(horizontal=True, vertical_alignment="center", gap="small"):
-        st.badge(f"{total} com estrela", icon=":material/star:", color="yellow")
+        st.badge(f"{total} com estrela amarela", icon=":material/star:", color="yellow")
         st.badge(f"{total - len(fresh) - len(retry)} publicados", icon=":material/check_circle:", color="green")
         st.badge(f"{len(fresh)} na fila", icon=":material/pending:", color="blue")
         if retry:
@@ -1410,8 +1412,10 @@ def _render_batch_start() -> None:
         st.subheader("Novo lote de SKUs", icon=":material/inventory_2:")
         with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
             source = st.segmented_control(
-                "Origem dos SKUs", ["Estrela no BaseLinker", "Colar SKUs"],
-                default="Estrela no BaseLinker", key="batch_source", required=True,
+                "Origem dos SKUs", ["Estrela amarela", "Colar SKUs"],
+                default="Estrela amarela", key="batch_source", required=True,
+                format_func=lambda option: (":yellow[:material/star:] Estrela amarela" if option == "Estrela amarela"
+                                            else ":material/edit_note: Colar SKUs"),
             )
             st.segmented_control("SKUs por lote", BATCH_SIZES, default=BATCH_SIZES[0], key="batch_size",
                                  required=True)
