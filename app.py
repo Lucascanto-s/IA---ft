@@ -16,6 +16,7 @@ import auth_ui
 from baselinker import BaseLinkerClient, BaseLinkerError, extract_image_urls
 from cover_import import find_related_covers, parse_name
 from image_processor import (
+    CANVAS_SIZE,
     compose_cover,
     compose_vehicle_group,
     cover_product_index,
@@ -34,6 +35,7 @@ from image_processor import (
     validate_output,
 )
 from project_utils import normalized_tokens, sanitize_sku
+from text_badge import render_text_badge
 from ui.drag_canvas import drag_canvas, image_data_url
 from ui.theme import ICON, STEPS, apply_theme, loading, page_header
 from vehicle_search import VehicleSearchError, find_vehicle_images
@@ -609,7 +611,39 @@ def _drag_assets(result: dict) -> dict:
     return assets
 
 
-def _current_previews(result: dict, final: bool = False) -> list[Image.Image]:
+def _text_badge_for(index: int) -> Image.Image | None:
+    """Rendered text box for image 2-4, or None when it is off/empty. Cached by the typed text."""
+    if not st.session_state.get(f"text_{index}_on"):
+        return None
+    text = str(st.session_state.get(f"text_{index}_value", "")).strip()
+    if not text:
+        return None
+    return render_text_badge(text, st.session_state.get(f"text_{index}_color", "#000000"))
+
+
+def _badge_base(size: tuple[int, int], max_w: int = 820) -> tuple[int, int]:
+    """Badge size in canvas pixels at zoom 100 (keeps aspect; the drawing has more resolution)."""
+    width, height = size
+    if width <= max_w:
+        return width, height
+    return max_w, max(1, round(height * max_w / width))
+
+
+def _paste_badge(base: Image.Image, badge: Image.Image, index: int,
+                 resampling: Image.Resampling) -> Image.Image:
+    base_w, base_h = _badge_base(badge.size)
+    scale = int(st.session_state.get(f"text_{index}_scale", 100))
+    width = max(1, round(base_w * scale / 100))
+    height = max(1, round(base_h * scale / 100))
+    fitted = badge.resize((width, height), resampling)
+    x = (CANVAS_SIZE[0] - width) // 2 + int(st.session_state.get(f"text_{index}_x", 0))
+    y = (CANVAS_SIZE[1] - height) // 2 + int(st.session_state.get(f"text_{index}_y", TEXT_DEFAULT_Y))
+    canvas = base.convert("RGBA")
+    canvas.alpha_composite(fitted, (x, y))
+    return canvas.convert("RGB")
+
+
+def _current_previews(result: dict, final: bool = False, with_text: bool = True) -> list[Image.Image]:
     """Fast bilinear render for the screen; final=True uses Lanczos for the published files."""
     resampling = Image.Resampling.LANCZOS if final else Image.Resampling.BILINEAR
     if result.get("cover_layers"):
@@ -624,13 +658,17 @@ def _current_previews(result: dict, final: bool = False) -> list[Image.Image]:
         cover = result["editor_sources"][1]
     previews = [cover]
     for index in range(2, 5):
-        previews.append(reposition_image(
+        image = reposition_image(
             result["editor_sources"][index],
             st.session_state.get(f"image_{index}_x", 0),
             st.session_state.get(f"image_{index}_y", 0),
             st.session_state.get(f"image_{index}_scale", 100),
             resampling=resampling,
-        ))
+        )
+        badge = _text_badge_for(index) if with_text else None
+        if badge is not None:
+            image = _paste_badge(image, badge, index, resampling)
+        previews.append(image)
     return previews
 
 
@@ -1263,15 +1301,46 @@ POSITION_SLIDERS = {
     "image_2": {"x": (-400, 400), "y": (-400, 400)},
     "image_3": {"x": (-400, 400), "y": (-400, 400)},
     "image_4": {"x": (-400, 400), "y": (-400, 400)},
+    "text_2": {"x": (-560, 560), "y": (-560, 560)},
+    "text_3": {"x": (-560, 560), "y": (-560, 560)},
+    "text_4": {"x": (-560, 560), "y": (-560, 560)},
 }
+TEXT_PREFIXES = ("text_2", "text_3", "text_4")
+TEXT_SCALE_RANGE = (30, 300)
+TEXT_DEFAULT_Y = 430  # a caixa comeca perto do rodape da foto
 
 
-def _position_sliders(prefix: str) -> None:
+def _render_text_controls(index: int, active: bool) -> None:
+    """Botão de texto, campo (CAIXA ALTA) e barras de lado/altura/tamanho das imagens 2 a 4."""
+    with st.container(border=True, key=f"lmr-card-text-{index}"):
+        head, field = st.columns([1.1, 3], vertical_alignment="bottom")
+        head.markdown("**:material/text_fields: Texto na foto**")
+        on = field.toggle("Adicionar texto", key=f"text_{index}_on")
+        if not on:
+            return
+        texto_col, cor_col = st.columns([4, 1], vertical_alignment="bottom")
+        texto_col.text_input("Texto (aparece em CAIXA ALTA)", key=f"text_{index}_value", max_chars=42,
+                             placeholder="Ex.: COMPRESSOR GM ORIGINAL")
+        cor_col.color_picker("Cor da letra", key=f"text_{index}_color")
+        if not active:
+            st.caption(":material/edit: Digite o texto acima para a caixa aparecer na foto.")
+            return
+        st.caption(":material/open_with: Arraste a caixa na imagem · **Ctrl + roda do mouse** muda o tamanho · "
+                   "ou use as barras abaixo.")
+        ranges = POSITION_SLIDERS[f"text_{index}"]
+        lado, altura, tamanho = st.columns(3)
+        lado.slider("Lado", *ranges["x"], step=1, key=f"text_{index}_x", persist_state="page")
+        altura.slider("Altura", *ranges["y"], step=1, key=f"text_{index}_y", persist_state="page")
+        tamanho.slider("Tamanho", *TEXT_SCALE_RANGE, step=5, key=f"text_{index}_scale", persist_state="page",
+                       format="%d%%")
+
+
+def _position_sliders(prefix: str, scale_range: tuple[int, int] = (50, 150)) -> None:
     """Side / height / zoom bars. persist_state keeps the values while the bars are hidden."""
     ranges = POSITION_SLIDERS[prefix]
     st.slider("Lado", *ranges["x"], step=1, key=f"{prefix}_x", persist_state="page")
     st.slider("Altura", *ranges["y"], step=1, key=f"{prefix}_y", persist_state="page")
-    st.slider("Zoom", 50, 150, step=5, key=f"{prefix}_scale", persist_state="page", format="%d%%")
+    st.slider("Zoom", *scale_range, step=5, key=f"{prefix}_scale", persist_state="page", format="%d%%")
 
 
 def _status_label() -> tuple[str, str, str]:
@@ -1639,21 +1708,35 @@ def _render_image_tabs(result: dict, assets: dict, reports: list[dict]) -> None:
 
     for index, tab in enumerate(tabs[1:], start=2):
         with tab:
+            badge = _text_badge_for(index)
             canvas_col, controls_col = _image_tab(fine_tune)
             with canvas_col:
                 content_size = assets[f"image_{index}_size"]
-                drag_canvas([
+                layers = [
                     {"id": "product", "label": f"Peça · imagem {index}", "src": assets[f"image_{index}"],
                      "base_w": content_size[0], "base_h": content_size[1], "top": None, "z": 1,
                      "shadow": False, "x_range": list(POSITION_SLIDERS[f"image_{index}"]["x"]),
                      "y_range": list(POSITION_SLIDERS[f"image_{index}"]["y"]), "scale_range": [50, 150]},
-                ], {"product": f"image_{index}"}, key=f"drag_image_{index}")
+                ]
+                prefixes = {"product": f"image_{index}"}
+                if badge is not None:
+                    base_w, base_h = _badge_base(badge.size)
+                    layers.append({
+                        "id": "text", "label": "Texto", "src": image_data_url(badge),
+                        "base_w": base_w, "base_h": base_h, "top": None, "z": 3, "shadow": False,
+                        "x_range": list(POSITION_SLIDERS[f"text_{index}"]["x"]),
+                        "y_range": list(POSITION_SLIDERS[f"text_{index}"]["y"]),
+                        "scale_range": list(TEXT_SCALE_RANGE),
+                    })
+                    prefixes["text"] = f"text_{index}"
+                drag_canvas(layers, prefixes, key=f"drag_image_{index}")
                 _framing_badge(reports[index - 1])
             if controls_col:
                 with controls_col:
                     with st.container(border=True, key=f"lmr-card-sliders-{index}"):
                         st.markdown("**:material/build: Peça**")
                         _position_sliders(f"image_{index}")
+            _render_text_controls(index, badge is not None)
 
 
 def _render_publish(result: dict, previews: list[Image.Image], reports: list[dict]) -> None:
@@ -1917,8 +2000,12 @@ def render_processor() -> None:
 
     for prefix in POSITION_SLIDERS:
         st.session_state.setdefault(f"{prefix}_x", 0)
-        st.session_state.setdefault(f"{prefix}_y", 0)
+        st.session_state.setdefault(f"{prefix}_y", TEXT_DEFAULT_Y if prefix.startswith("text_") else 0)
         st.session_state.setdefault(f"{prefix}_scale", 100)
+        if prefix.startswith("text_"):
+            st.session_state.setdefault(f"{prefix}_on", False)
+            st.session_state.setdefault(f"{prefix}_value", "")
+            st.session_state.setdefault(f"{prefix}_color", "#000000")
     st.session_state.setdefault("part_contrast", DEFAULT_CONTRAST_PCT)
     st.session_state.setdefault("part_sharpness", DEFAULT_SHARPNESS_PCT)
     st.session_state.setdefault("fine_tune", False)
@@ -1931,7 +2018,10 @@ def render_processor() -> None:
                                   st.session_state["part_sharpness"])
     assets = _drag_assets(result)
     previews = _current_previews(result)
-    reports = [validate_output(image) for image in previews]
+    # Framing checks judge the part only: the text box is decorative and must not trip "off-centre".
+    has_text = any(_text_badge_for(index) is not None for index in range(2, 5))
+    framing_src = _current_previews(result, with_text=False) if has_text else previews
+    reports = [validate_output(image) for image in framing_src]
     if result.get("cover_layers"):
         # The cover is cars on top + part below by design: only cuts at the border matter there.
         reports[0] = {**reports[0], "valid": not reports[0]["clipped"]}
