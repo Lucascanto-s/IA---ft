@@ -11,6 +11,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from PIL import Image, ImageOps
 
+import auth
+import auth_ui
 from baselinker import BaseLinkerClient, BaseLinkerError, extract_image_urls
 from cover_import import find_related_covers, parse_name
 from image_processor import (
@@ -38,6 +40,9 @@ from vehicle_search import VehicleSearchError, find_vehicle_images
 
 
 load_dotenv()
+# Settings saved in the app (encrypted, dados/) override .env.
+auth.init_db()
+auth.apply_settings_to_env()
 PROJECT_DIR = Path(__file__).resolve().parent
 FILES_DIR = PROJECT_DIR / "arquivos"
 VEHICLE_MAP_FILE = Path(os.getenv("VEHICLE_MAP_FILE", FILES_DIR / "mapa" / "vehicle_map.csv"))
@@ -872,7 +877,8 @@ def _render_publish_all(batch: dict, entries: list[dict]) -> None:
         )
         confirm = st.checkbox("Conferi as capas abaixo e quero publicar todos os editados.",
                               key="confirm_publish_all")
-        if not st.button(f"Publicar todos os editados ({len(ready)})", type="primary", disabled=not confirm,
+        if not st.button(f"Publicar todos os editados ({len(ready)})", type="primary",
+                         disabled=not confirm or not auth_ui.can("publicar"),
                          icon=":material/publish:", key="publish_all"):
             return
         base_url = os.getenv("PUBLIC_IMAGE_BASE_URL", "").strip()
@@ -1666,19 +1672,23 @@ def _render_publish(result: dict, previews: list[Image.Image], reports: list[dic
             ":material/link: Envio por URLs públicas." if base_url
             else ":material/computer: Sem URL pública configurada: as imagens vão direto do computador (base64)."
         )
+        may_publish = auth_ui.can("publicar")
+        if not may_publish:
+            st.info("Seu login não tem permissão para publicar. Salve o SKU editado e peça ao administrador.",
+                    icon=":material/lock:")
         confirm = st.checkbox("Revisei as quatro imagens e quero publicar este SKU.",
                               key=f"confirm_publish_{result['sku']}")
         batch = st.session_state.get("sku_batch")
         is_last = not batch or batch["current_index"] >= len(batch["skus"]) - 1
         with st.container(horizontal=True):
-            publish = st.button("Publicar no BaseLinker", type="primary", disabled=not confirm,
+            publish = st.button("Publicar no BaseLinker", type="primary", disabled=not confirm or not may_publish,
                                 icon=":material/publish:", key=f"publish_{result['sku']}")
             publish_next = bool(batch) and st.button(
                 "Publicar e ver resumo do lote" if is_last else "Publicar e ir para o próximo",
-                type="primary", disabled=not confirm, icon=":material/fast_forward:",
+                type="primary", disabled=not confirm or not may_publish, icon=":material/fast_forward:",
                 key=f"publish_next_{result['sku']}",
             )
-            if st.button("Desfazer última publicação", disabled=not result.get("backup_path"),
+            if st.button("Desfazer última publicação", disabled=not result.get("backup_path") or not may_publish,
                          icon=":material/undo:", key=f"undo_{result['sku']}"):
                 try:
                     client().restore_images(result["backup_path"])
@@ -1987,11 +1997,22 @@ def catalogo() -> None:
 
 
 apply_theme()
-PAGES = [
-    st.Page(processar, title="Processar SKU", icon=":material/auto_awesome:", default=True,
-            help="Lote de SKUs: buscar no BaseLinker, aprovar veículos, ajustar as quatro imagens e publicar."),
-    st.Page(catalogo, title="Catálogo de veículos", icon=":material/directions_car:",
-            help="Importar carros das capas do BaseLinker e cadastrar imagens de veículos para as próximas buscas."),
-    # Next step (login): an admin-only page is appended here when the user is an administrator.
-]
+user = auth_ui.login_gate()
+PAGES = []
+if auth.can(user, "processar"):
+    PAGES.append(st.Page(processar, title="Processar SKU", icon=":material/auto_awesome:", default=True,
+                         help="Lote de SKUs: buscar no BaseLinker, aprovar veículos, ajustar as quatro imagens e publicar."))
+if auth.can(user, "catalogo"):
+    PAGES.append(st.Page(catalogo, title="Catálogo de veículos", icon=":material/directions_car:",
+                         help="Importar carros das capas do BaseLinker e cadastrar imagens de veículos para as próximas buscas."))
+if auth.can(user, "usuarios"):
+    PAGES.append(st.Page(auth_ui.page_users, title="Usuários", icon=":material/group:", url_path="usuarios"))
+if auth.can(user, "configuracoes"):
+    PAGES.append(st.Page(auth_ui.page_settings, title="Configurações", icon=":material/settings:",
+                         url_path="configuracoes"))
+if not PAGES:
+    PAGES.append(st.Page(auth_ui.page_waiting, title="Aguardando liberação", icon=":material/hourglass_top:",
+                         url_path="aguardando"))
+PAGES.append(st.Page(auth_ui.page_account, title=user["nome"].split()[0], icon=":material/account_circle:",
+                     url_path="conta"))
 st.navigation(PAGES, position="top").run()

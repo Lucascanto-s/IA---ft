@@ -11,3 +11,9 @@ arquivos/backup/*
 *.zip
 .env
 .venv/
+
+# Login, configuracoes criptografadas e chave (nunca vao para o git nem para o zip)
+dados/
+# Admins exportados para o zip de instalacao
+dados_iniciais/
+dist/

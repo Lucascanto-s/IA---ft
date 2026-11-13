@@ -91,3 +91,22 @@ essa pasta com HTTPS e permitir acesso sem login para o BaseLinker.
 - Fontes (Inter, Chakra Petch, JetBrains Mono, Orbitron) e ícones Tabler ficam em `static/`, servidos localmente (funciona offline).
 - Logo e ícone: `python tools/make_brand.py` gera `static/branding/` (PNG e `.ico`).
 - Depois de alterar arquivos em `ui/` ou `.streamlit/config.toml`, reinicie o `streamlit run` para garantir que carregou.
+
+## Login, permissões e configurações
+
+- No primeiro acesso deste computador, o app pede para criar o **administrador**.
+- Os logins, as permissões e as configurações ficam em `dados/` (fora do git). O token do BaseLinker e as opções são
+  salvos **criptografados**, e a chave fica em `dados/chave.key`. Senhas são guardadas só como hash (scrypt).
+- Na tela de login, **Criar conta** gera um login sem permissões. O administrador libera o acesso em **Usuários**.
+- O token, o catálogo e as estrelas são configurados na página **Configurações**. Elas valem mais que o `.env`.
+
+## Instalar em outro computador
+
+1. Neste computador (com o seu login de administrador já criado), rode `python tools/empacotar.py`.
+   O zip sai em `dist/` com o código, o catálogo de veículos e os administradores (somente hash da senha).
+   Ficam de fora o `.env`, o `dados/`, os downloads, as saídas e os backups.
+2. No outro computador, extraia o zip e abra `instalar.bat` (instala o Python se precisar e cria o atalho
+   **LMR Edit** na área de trabalho).
+3. A pessoa abre o atalho e clica em **Criar conta**.
+4. O administrador entra com o login dele nesse computador, libera as permissões em **Usuários** e coloca o token
+   do BaseLinker em **Configurações**.
